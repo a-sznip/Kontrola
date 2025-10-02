@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Zarządzania Kontrolami</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal.open .modal-content {
+            transform: translateY(0);
+        }
+        .participant-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2px solid #d1d5db;
+            border-radius: 0.25rem;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+        }
+        .participant-checkbox:checked {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+        .participant-checkbox:checked::before {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 0.875rem;
+        }
+        .signature-pad {
+            border: 2px solid #3b82f6;
+            background-color: #fff;
+            cursor: crosshair;
+            touch-action: none;
+            height: 12rem;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Panel Zarządzania Kontrolami</h1>
+        
+        <div id="main-list-view">
+            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
+                <input type="text" id="filter-address" placeholder="Filtruj po adresie..." class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select type="text" id="filter-type" class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Wszystkie typy</option>
+                    <option value="planowa">Planowa</option>
+                    <option value="interwencyjna">Interwencyjna</option>
+                </select>
+                <button id="add-control-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Dodaj kontrolę</button>
+                <button id="add-joint-note-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Notatka Służbowa</button>
+                <button id="clear-all-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Wyczyść wszystkie</button>
+            </div>
+            
+            <div id="controls-list" class="space-y-4">
+                </div>
+        </div>
+
+        <div id="message-box" class="fixed bottom-8 right-8 p-4 rounded-lg text-white shadow-lg z-50 transition-opacity duration-300 opacity-0 hidden"></div>
+    </div>
+
+    <div id="control-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title" class="text-2xl font-bold text-gray-800">Dodaj nową kontrolę</h2>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <form id="control-form" class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                    <div class="flex-1">
+                        <label for="control-street" class="block text-gray-700 font-medium mb-1">Ulica</label>
+                        <input type="text" id="control-street" required list="street-suggestions" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <datalist id="street-suggestions"></datalist>
+                    </div>
+                    <div class="flex-1">
+                        <label for="control-house-number" class="block text-gray-700 font-medium mb-1">Numer domu</label>
+                        <input type="text" id="control-house-number" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                    <div class="flex-1">
+                        <label for="control-city" class="block text-gray-700 font-medium mb-1">Miejscowość</label>
+                        <input type="text" id="control-city" required list="city-suggestions" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <datalist id="city-suggestions"></datalist>
+                    </div>
+                    <div class="flex-1">
+                        <label for="control-zip" class="block text-gray-700 font-medium mb-1">Kod pocztowy</label>
+                        <input type="text" id="control-zip" required pattern="[0-9]{2}-[0-9]{3}" placeholder="np. 12-345" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label for="control-type" class="block text-gray-700 font-medium mb-1">Typ</label>
+                    <select id="control-type" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="planowa">Planowa</option>
+                        <option value="interwencyjna">Interwencyjna</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="control-date" class="block text-gray-700 font-medium mb-1">Data</label>
+                    <input type="date" id="control-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-gray-700 font-medium">Uczestnicy</label>
+                    <div id="participants-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        </div>
+                </div>
+                <div class="flex space-x-4">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Zapisz</button>
+                    <button type="button" id="delete-control-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Usuń</button>
+                    <button type="button" id="generate-protocol-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Generuj protokół</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="protocol-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Generowanie Protokołu Oględzin</h2>
+                <button id="close-protocol-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <form id="protocol-form" class="space-y-4">
+                <div>
+                    <label for="protocol-date" class="block text-gray-700 font-medium mb-1">Data oględzin</label>
+                    <input type="date" id="protocol-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="protocol-case" class="block text-gray-700 font-medium mb-1">Sprawa</label>
+                    <textarea id="protocol-case" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-gray-700 font-medium">Obecni</label>
+                    <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                        <div class="flex-1">
+                            <label for="protocol-union-reps" class="block text-gray-700 mb-1">Przedstawiciele Związku</label>
+                            <textarea id="protocol-union-reps" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                            <div class="mt-2 text-sm text-gray-500">Automatycznie uzupełnione z danych kontroli.</div>
+                        </div>
+                        <div class="flex-1">
+                            <label for="protocol-admin-reps" class="block text-gray-700 mb-1">Inni przedstawiciele organów administracji</label>
+                            <textarea id="protocol-admin-reps" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label for="protocol-parties" class="block text-gray-700 font-medium mb-1">Strony i ich pełnomocnicy</label>
+                    <textarea id="protocol-parties" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div>
+                    <label for="protocol-witnesses" class="block text-gray-700 font-medium mb-1">Świadkowie</label>
+                    <textarea id="protocol-witnesses" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="note-selection-container p-4 bg-gray-100 rounded-lg">
+                    <label class="block text-gray-700 font-medium mb-2">Dodaj notatki</label>
+                    <div id="note-categories" class="flex flex-wrap gap-2 mb-2"></div>
+                    <div id="note-list" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div>
+                    <label for="protocol-findings" class="block text-gray-700 font-medium mb-1">Ustalono co następuje</label>
+                    <textarea id="protocol-findings" rows="5" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="space-y-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <label class="block text-gray-700 font-medium mb-1">Dodaj zdjęcia z aparatu / pliku</label>
+                    <input type="file" id="protocol-photos-input" accept="image/*" multiple capture="environment" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <div id="photos-preview-container" class="mt-4 flex flex-wrap gap-3">
+                        </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Podpis przedstawicieli Związku</label>
+                        <canvas id="union-signature-pad" class="signature-pad w-full h-48"></canvas>
+                        <button type="button" id="clear-union-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Podpis stron i osób obecnych</label>
+                        <canvas id="parties-signature-pad" class="signature-pad w-full h-48"></canvas>
+                        <button type="button" id="clear-parties-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                    </div>
+                </div>
+                <div class="flex space-x-4">
+                    <button type="button" id="save-protocol-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Zapisz protokół</button>
+                    <button type="button" id="delete-protocol-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Usuń protokół</button>
+                    <button type="button" id="finalize-protocol-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Generuj i pobierz protokół</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="joint-note-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Notatka Służbowa (z Protokołów)</h2>
+                <button id="close-joint-note-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <form id="joint-note-form" class="space-y-4">
+                <div class="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
+                    <label for="joint-note-date-filter" class="block text-gray-700 font-medium mb-1">Data kontroli (do filtrowania)</label>
+                    <div class="flex space-x-2">
+                        <input type="date" id="joint-note-date-filter" required class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" id="filter-joint-note-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Filtruj protokoły</button>
+                    </div>
+                </div>
+                
+                <div id="joint-note-protocols-summary" class="space-y-4 p-4 bg-gray-50 rounded-lg hidden">
+                    <p id="protocols-count" class="font-semibold text-gray-700"></p>
+                    <p class="text-xs text-red-500">Uwaga: Wygenerowana notatka będzie zawierać tylko dane z protokołów, które zostały **wcześniej zapisane** (przycisk "Zapisz protokół").</p>
+                </div>
+
+                <div>
+                    <label for="joint-note-city" class="block text-gray-700 font-medium mb-1">Miejscowość sporządzenia</label>
+                    <input type="text" id="joint-note-city" value="Giżycko" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="joint-note-subject" class="block text-gray-700 font-medium mb-1"> Uwagi </label>
+                    <textarea id="joint-note-subject" rows="2" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <div class="space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <label class="block text-gray-700 font-medium">Autorzy Notatki (pobrani z Protokółów)</label>
+                    <div id="joint-note-participants-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        </div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-medium mb-1">Podpis (opcjonalny)</label>
+                    <canvas id="joint-note-signature-pad" class="signature-pad w-full h-32"></canvas>
+                    <button type="button" id="clear-joint-note-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                </div>
+                <button type="button" id="finalize-joint-note-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 w-full" disabled>Generuj i pobierz Notatkę (PDF)</button>
+            </form>
+        </div>
+    </div>
+    <div id="pdf-content-container" class="absolute -left-[9999px] p-6 bg-white w-[794px] h-[1123px] font-sans">
+        </div>
+    
+    <script>
+        // --- DANE AUTOUZUPEŁNIANIA ---
+        
+        // 1. ULICE
+        const ulice = ["11 Listopada", "3 Maja", "Akacjowa", "Artyleryjska", "Batorego", "Bema", "Biskupa Łukasza", "Błotna", "Boczna", "Bożnicza", "Cicha", "Dębowa", "Dolna", "Dworcowa", "Działkowa", "Gdańska", "Giżycka", "Górna", "Grażyny", "Grenadierów", "Grunwaldzka", "Jagiełły", "Jana Pawła II", "Jeziorna", "Kacza", "Kętrzyńska", "Kilińskiego", "Klonowa", "Kolejowa", "Konarskiego", "Kopernika", "Kościelna", "Kościuszki", "Królowej Jadwigi", "Krótka", "Kruklińska", "Krzymińskiego", "Księdza Antoniego", "Księdza Michała", "Księdza Stanisława", "Kwiatowa", "Legionów", "Leśna", "Lipowa", "Lotnicza", "Łąkowa", "Mazurska", "Mickiewicza", "Moniuszki", "Nadbrzeżna", "Niepodległości", "Nowa", "Obwodnica", "Ogrodowa", "Olsztyńska", "Orzeszkowej", "Paderewskiego", "Parkowa", "Partyzantów", "Pasaż Portowy", "Piaskowa", "Piękna Góra", "Piłsudskiego", "Polna", "Portowa", "Przemysłowa", "Rondo Solidarności", "Rondo Żołnierzy Wyklętych", "Rynkowa", "Sikorskiego", "Słoneczna", "Sosnowa", "Spacerowa", "Sportowa", "Spółdzielcza", "Srebrna", "Stanisława Moniuszki", "Staszica", "Suwalska", "Szewska", "Szkolna", "Szpitalna", "Ślusarska", "Świderska", "Świerkowa", "Targowa", "Traugutta", "Wesoła", "Wileńska", "Wiosenna", "Witosa", "Wojska Polskiego", "Wrocławska", "Wyzwolenia", "Zamkowa", "Zatorze", "Zielona", "Żeromskiego", "Żeglarska", "Żywiczna"];
+        
+        // 2. MIEJSCOWOŚCI (potrzebne do datalist)
+        const miejscowosciByGmina = {
+            "Miasto Giżycko": ["Giżycko"],
+            "Gmina Banie Mazurskie": ["Banie Mazurskie", "Gryżewo", "Jagiele", "Jagoczany", "Klewiny", "Kruki", "Lisy", "LIsiki", "Miczuły", "Mieduniszki Wielkie", "Mieczniki", "Rapa", "Rogale", "Rogalki", "Stary Żabin", "Żabin", "Żabinek", "Żabin Rybacki", "Zapały"],
+            "Gmina Budry": ["Budry", "Budzewo", "Brzozówko", "Dąbrówka", "Droglewo", "Góry", "Grądy Węgorzewskie", "Ołownik", "Olszewo Węgorzewskie", "Więcki", "Zabrost Wielki"],
+            "Gmina Giżycko": ["Antonowo", "Bogacko", "Bogaczewo", "Bystry", "Doba", "Gajewo", "Grajwo", "Guty", "Kamionki", "Kąp", "Kozin", "Kożuchy Małe", "Kożuchy Wielkie", "Kruklin", "Pieczonki", "Pierkunowo", "Piękna Góra", "Róg Pierkunowski", "Sołdany", "Spytkowo", "Sterławki Małe", "Sulimy", "Szczybały Giżyckie", "Świdry", "Upałty", "Upałty Małe", "Wilkaski", "Wilkasy", "Wronka", "Wrony"],
+            "Gmina Kruklanki": ["Brożówka", "Diabla Góra", "Grądy Kruklaneckie", "Jeziorowskie", "Jurkowo", "Jurkówko", "Kamienna Struga", "Kruklanki", "Lipowo", "Łękuk Wielki", "Możdżany", "Wolisko", "Żabinka", "Żywki"],
+            "Gmina Miłki": ["Miłki", "Bogaczewo", "Gawliki", "Jagodne Małe", "Jagodne Wielkie", "Jedrusy", "Kleszczewo", "Kozin", "Lisewo, Marcinowa Wola", "Paprotki", "Przykop", "Ruda", "Rydzewo", "Staświny", "Wyszowate"],
+            "Miasto i Gmina Orzysz": ["Orzysz", "Drozdowo", "Dziubiele", "Dziubiele Małe", "Gaudynki", "Gorzekały", "Góra", "Grądy", "Grądy Podmiejskie", "Grzegorze", "Kamieńskie", "Klusy", "Mikosze", "Mikosze-Osada", "Nowa Wieś", "Nowe Guty", "Odoje", "Ogródek", "Okartowo", "Okartowo-Przystanek", "Okartowo-Tartak", "Osiki", "Pianki", "Rostki Skomackie", "Rzęśniki", "Strzelniki", "Sumki", "Szwejkówko", "Tuchlin", "Ublik", "Wężewo", "Wierzbiny"],
+            "Gmina Pozezdrze": ["Pozezdrze", "Dziaduszyn", "Harsz", "Jakunówko", "Krzywińskie", "Kuty", "Pieczarki", "Piłaki Wielkie", "Przerwanki", "Przytuły", "Radziszewo", "Stręgielek", "Wyłudy"],
+            "Miasto i Gmina Ryn": ["Ryn", "Bachorza", "Canki", "Dzikowizna", "Głąbowo", "Grzybowo", "Jeziorko", "Knis", "Kronowo", "Krzyżany", "Ławki", "Mioduńskie", "Monetki", "Orło", "Prażmowo", "Rybical", "Ryński Dwór", "Ryńskie Pole", "Siejkowo", "Skop", "Słabowo", "Stara Rudówka", "Sterławki Wielkie", "Szymonka", "Tros", "Wejdyki", "Zielony Lasek"],
+            "Gmina Srokowo": ["Srokowo", "Bajory Małe", "Bajory Wielkie", "Jankowice", "Jegławki", "Kaczory", "Kosakowo", "Leśniewo", "Leśny Rów", "Łęknica", "Nowa Różanka", "Pieczarki", "Podlaski", "Różanka", "Silec", "Siwa Dziura", "Stare Różanki", "Wilkowo", "Wólka Węgorzewska", "Węgorzewo"]
+        };
+
+        // 3. KODY POCZTOWE (do automatycznego uzupełniania)
+        const zipCodesByCity = {
+            "Banie Mazurskie": "19-520",
+            "Gryżewo": "19-520",
+            "Jagiele": "19-520",
+            "Jagoczany": "19-520",
+            "Klewiny": "19-520",
+            "Kruki": "19-520",
+            "Lisy": "19-520",
+            "LIsiki": "19-520",
+            "Miczuły": "19-520",
+            "Mieduniszki Wielkie": "19-520",
+            "Mieczniki": "19-520",
+            "Rapa": "19-520",
+            "Rogale": "19-520",
+            "Rogalki": "19-520",
+            "Stary Żabin": "19-520",
+            "Żabin": "19-520",
+            "Żabinek": "19-520",
+            "Żabin Rybacki": "19-520",
+            "Zapały": "19-520",
+            "Budry": "11-600",
+            "Budzewo": "11-600",
+            "Brzozówko": "11-600",
+            "Dąbrówka": "11-600",
+            "Droglewo": "11-600",
+            "Góry": "11-600",
+            "Grądy Węgorzewskie": "11-600",
+            "Ołownik": "11-600",
+            "Olszewo Węgorzewskie": "11-600",
+            "Więcki": "11-600",
+            "Zabrost Wielki": "11-600",
+            "Antonowo": "11-500",
+            "Bogacko": "11-500",
+            "Bogaczewo": "11-500",
+            "Bystry": "11-500",
+            "Doba": "11-500",
+            "Gajewo": "11-500",
+            "Grajwo": "11-500",
+            "Guty": "11-500",
+            "Kamionki": "11-500",
+            "Kąp": "11-500",
+            "Kozin": "11-500",
+            "Kożuchy Małe": "11-500",
+            "Kożuchy Wielkie": "11-500",
+            "Kruklin": "11-500",
+            "Pieczonki": "11-500",
+            "Pierkunowo": "11-500",
+            "Piękna Góra": "11-500",
+            "Róg Pierkunowski": "11-500",
+            "Sołdany": "11-500",
+            "Spytkowo": "11-500",
+            "Sterławki Małe": "11-500",
+            "Sulimy": "11-500",
+            "Szczybały Giżyckie": "11-500",
+            "Świdry": "11-500",
+            "Upałty": "11-500",
+            "Upałty Małe": "11-500",
+            "Wilkaski": "11-500",
+            "Wilkasy": "11-500",
+            "Wronka": "11-500",
+            "Wrony": "11-500",
+            "Giżycko": "11-500",
+            "Brożówka": "11-612",
+            "Diabla Góra": "11-612",
+            "Grądy Kruklaneckie": "11-612",
+            "Jeziorowskie": "11-612",
+            "Jurkowo": "11-612",
+            "Jurkówko": "11-612",
+            "Kamienna Struga": "11-612",
+            "Kruklanki": "11-612",
+            "Lipowo": "11-612",
+            "Łękuk Wielki": "11-612",
+            "Możdżany": "11-612",
+            "Wolisko": "11-612",
+            "Żabinka": "11-612",
+            "Żywki": "11-612",
+            "Miłki": "11-513",
+            "Bogaczewo": "11-513",
+            "Gawliki": "11-513",
+            "Jagodne Małe": "11-513",
+            "Jagodne Wielkie": "11-513",
+            "Jedrusy": "11-513",
+            "Kleszczewo": "11-513",
+            "Lisewo, Marcinowa Wola": "11-513",
+            "Paprotki": "11-513",
+            "Przykop": "11-513",
+            "Ruda": "11-513",
+            "Rydzewo": "11-513",
+            "Staświny": "11-513",
+            "Wyszowate": "11-513",
+            "Orzysz": "12-250",
+            "Drozdowo": "12-250",
+            "Dziubiele": "12-250",
+            "Dziubiele Małe": "12-250",
+            "Gaudynki": "12-250",
+            "Gorzekały": "12-250",
+            "Góra": "12-250",
+            "Grądy": "12-250",
+            "Grądy Podmiejskie": "12-250",
+            "Grzegorze": "12-250",
+            "Kamieńskie": "12-250",
+            "Klusy": "12-250",
+            "Mikosze": "12-250",
+            "Mikosze-Osada": "12-250",
+            "Nowa Wieś": "12-250",
+            "Nowe Guty": "12-250",
+            "Odoje": "12-250",
+            "Ogródek": "12-250",
+            "Okartowo": "12-250",
+            "Okartowo-Przystanek": "12-250",
+            "Okartowo-Tartak": "12-250",
+            "Osiki": "12-250",
+            "Pianki": "12-250",
+            "Rostki Skomackie": "12-250",
+            "Rzęśniki": "12-250",
+            "Strzelniki": "12-250",
+            "Sumki": "12-250",
+            "Szwejkówko": "12-250",
+            "Tuchlin": "12-250",
+            "Ublik": "12-250",
+            "Wężewo": "12-250",
+            "Wierzbiny": "12-250",
+            "Pozezdrze": "11-610",
+            "Dziaduszyn": "11-610",
+            "Harsz": "11-610",
+            "Jakunówko": "11-610",
+            "Krzywińskie": "11-610",
+            "Kuty": "11-610",
+            "Pieczarki": "11-610",
+            "Piłaki Wielkie": "11-610",
+            "Przerwanki": "11-610",
+            "Przytuły": "11-610",
+            "Radziszewo": "11-610",
+            "Stręgielek": "11-610",
+            "Wyłudy": "11-610",
+            "Ryn": "11-520",
+            "Bachorza": "11-520",
+            "Canki": "11-520",
+            "Dzikowizna": "11-520",
+            "Głąbowo": "11-520",
+            "Grzybowo": "11-520",
+            "Jeziorko": "11-520",
+            "Knis": "11-520",
+            "Kronowo": "11-520",
+            "Krzyżany": "11-520",
+            "Ławki": "11-520",
+            "Mioduńskie": "11-520",
+            "Monetki": "11-520",
+            "Orło": "11-520",
+            "Prażmowo": "11-520",
+            "Rybical": "11-520",
+            "Ryński Dwór": "11-520",
+            "Ryńskie Pole": "11-520",
+            "Siejkowo": "11-520",
+            "Skop": "11-520",
+            "Słabowo": "11-520",
+            "Stara Rudówka": "11-520",
+            "Sterławki Wielkie": "11-520",
+            "Szymonka": "11-520",
+            "Tros": "11-520",
+            "Wejdyki": "11-520",
+            "Zielony Lasek": "11-520",
+            "Srokowo": "11-610",
+            "Bajory Małe": "11-610",
+            "Bajory Wielkie": "11-610",
+            "Jankowice": "11-610",
+            "Jegławki": "11-610",
+            "Kaczory": "11-610",
+            "Kosakowo": "11-610",
+            "Leśniewo": "11-610",
+            "Leśny Rów": "11-610",
+            "Łęknica": "11-610",
+            "Nowa Różanka": "11-610",
+            "Pieczarki": "11-610",
+            "Podlaski": "11-610",
+            "Różanka": "11-610",
+            "Silec": "11-610",
+            "Siwa Dziura": "11-610",
+            "Stare Różanki": "11-610",
+            "Wilkowo": "11-610",
+            "Wólka Węgorzewska": "11-610",
+            "Węgorzewo": "11-610",
+        };
+
+        // 4. Uczestnicy - STAŁA LISTA ZGODNA Z POLECENIEM UŻYTKOWNIKA
+        const availableParticipants = [
+            'Daria Łucaś - insp. ds. kontroli i windykacji',
+            'Ewelina Bujniak - insp. ds. kontroli i windykacji',
+            'Krzysztof Balcerzak - podinsp. ds. kontroli i windykacji',
+            'Adam Sznip - insp. ds. kontroli i windykacji',
+        ];
+
+        // 5. Notatki (kategorie i treść) - ZGODNE Z WYMOGAMI UŻYTKOWNIKA
+        const noteDatabase = [
+            { category: "Brak dostępu", notes: [
+                "Na nieruchomości nikogo nie zastano.",
+                "Nieruchomość ogrodzona, brak możliwości wejścia na posesję.",
+                "Brama zamknięta na kłódkę, nikt nie otwiera.",
+                "Brak udostępnienia pojemników i dostępu do terenu kontroli.",
+                "Pomimo wielokrotnego dzwonienia, nikt nie otworzył drzwi.",
+                "Nieruchomość niezamieszkała/opuszczona.",
+                "Brak kontaktu z właścicielem/użytkownikiem nieruchomości.",
+                "Pod wskazanym adresem znajduje się pustostan."
+            ] },
+            { category: "Brak segregacji", notes: [
+                "Brak segregacji odpadów komunalnych.",
+                "Stwierdzono mieszanie frakcji odpadów w pojemniku na odpady zmieszane.",
+                "Odpady BIO są zmieszane z innymi frakcjami.",
+                "W pojemniku na odpady zmieszane znajdują się odpady segregowane (np. szkło, papier, plastik).",
+                "W worku na szkło znajdują się inne frakcje (np. plastik).",
+                "W worku na papier znajdują się inne frakcje (np. plastik, szkło).",
+                "W worku na plastik znajdują się inne frakcje (np. szkło, papier).",
+                "Brak oświadczenia o kompostowaniu odpadów BIO.",
+                "Brak pojemników do segregacji na terenie nieruchomości."
+            ] },
+            { category: "Inne nieprawidłowości", notes: [
+                "Brak oznaczenia pojemników.",
+                "Pojemniki są przepełnione.",
+                "Pojemniki i worki znajdują się poza terenem nieruchomości.",
+                "Pojemniki są uszkodzone, nieszczelne.",
+                "Stwierdzono zbieranie odpadów w sposób niezgodny z regulaminem.",
+                "Brak pojemnika na odpady zmieszane/segregowane.",
+                "Odpady wielkogabarytowe porzucone poza miejscem do tego przeznaczonym.",
+                "Odpady budowlane/rozbiórkowe w pojemnikach na odpady komunalne."
+            ] },
+            { category: "Prawidłowo", notes: [
+                "Prawidłowa segregacja odpadów.",
+                "Pojemniki są oznaczone i utrzymane w czystości.",
+                "Brak uwag."
+            ] }
+        ];
+
+        // --- ZMIENNE GLOBALNE I DOM ---
+        let controls = JSON.parse(localStorage.getItem('controls')) || [];
+        let currentControlId = null;
+        let photos = [];
+        let currentProtocol;
+        let unionSignaturePad, partiesSignaturePad, jointNoteSignaturePad;
+
+        const controlModal = document.getElementById('control-modal');
+        const controlForm = document.getElementById('control-form');
+        const protocolModal = document.getElementById('protocol-modal');
+        const protocolForm = document.getElementById('protocol-form');
+        const jointNoteModal = document.getElementById('joint-note-modal');
+        const pdfContentContainer = document.getElementById('pdf-content-container');
+
+        // --- UTILITIES ---
+
+        function showMessage(message, type = 'info') {
+            const box = document.getElementById('message-box');
+            box.textContent = message;
+            box.className = `fixed bottom-8 right-8 p-4 rounded-lg shadow-lg z-50 transition-opacity duration-300 opacity-100 block ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`;
+
+            setTimeout(() => {
+                box.classList.replace('opacity-100', 'opacity-0');
+                setTimeout(() => box.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        function getFullAddress(control) {
+            return `${control.street} ${control.houseNumber}, ${control.city} ${control.zip}`;
+        }
+
+        function formatType(type) {
+            return type === 'planowa' ? 'Planowa' : 'Interwencyjna';
+        }
+
+        function formatDate(dateString) {
+            return dateString ? new Date(dateString).toLocaleDateString('pl-PL') : '';
+        }
+
+        // --- RENDER FUNCTIONS ---
+
+        function renderDatalists() {
+            const streetDatalist = document.getElementById('street-suggestions');
+            streetDatalist.innerHTML = ulice.map(u => `<option value="${u}">`).join('');
+
+            const cityDatalist = document.getElementById('city-suggestions');
+            cityDatalist.innerHTML = Object.values(miejscowosciByGmina).flat().map(m => `<option value="${m}">`).join('');
+        }
+
+        function renderParticipantsCheckboxes(selectedParticipants = []) {
+            const container = document.getElementById('participants-container');
+            container.innerHTML = '';
+            availableParticipants.forEach(p => {
+                const isChecked = selectedParticipants.includes(p);
+                const id = p.replace(/\s+/g, '-').toLowerCase();
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-2';
+                div.innerHTML = `
+                    <input type="checkbox" id="${id}" name="participant" value="${p}" ${isChecked ? 'checked' : ''} class="participant-checkbox">
+                    <label for="${id}" class="text-sm text-gray-700">${p}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderControls(data = controls) {
+            const list = document.getElementById('controls-list');
+            list.innerHTML = '';
+
+            if (data.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500 p-8 border border-gray-200 rounded-lg">Brak zapisanych kontroli.</p>';
+                return;
+            }
+
+            data.forEach(control => {
+                const hasProtocol = control.protocol && control.protocol.findings;
+                const item = document.createElement('div');
+                item.className = 'bg-gray-50 p-4 border border-gray-200 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0';
+                item.innerHTML = `
+                    <div>
+                        <p class="text-lg font-semibold text-gray-800">${getFullAddress(control)}</p>
+                        <p class="text-sm text-gray-600">${formatType(control.type)} | Data: ${formatDate(control.date)}</p>
+                        <p class="text-xs ${hasProtocol ? 'text-green-600' : 'text-red-500'} font-medium mt-1">Protokół: ${hasProtocol ? 'Zapisany' : 'Brak'}</p>
+                    </div>
+                    <button data-id="${control.id}" class="edit-btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-300 text-sm w-full sm:w-auto">Edytuj / Protokół</button>
+                `;
+                list.appendChild(item);
+            });
+
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.dataset.id;
+                    openControlModal(id);
+                });
+            });
+        }
+        
+        // --- FUNKCJE NOTATEK ---
+
+        function createNoteButton(noteText) {
+            const button = document.createElement('button');
+            button.type = 'button'; // FIX: Dodano type="button", aby zapobiec wysłaniu formularza/zamknięciu modalu
+            button.textContent = noteText;
+            button.className = 'text-xs bg-white text-gray-800 border border-gray-300 py-1 px-2 rounded-lg hover:bg-gray-100 transition-colors duration-150 text-left shadow-sm';
+            button.onclick = () => {
+                const findings = document.getElementById('protocol-findings');
+                const separator = findings.value.trim().endsWith('\n') || findings.value.length === 0 ? '' : '\n';
+                findings.value += separator + noteText + '\n';
+            };
+            return button;
+        }
+
+        function renderNoteCategories(activeFilter = '') {
+            const container = document.getElementById('note-categories');
+            // FIX: Dodano type="button" do przycisku "Wszystkie"
+            container.innerHTML = `<button type="button" data-filter="" class="note-category-btn ${activeFilter === '' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} font-semibold py-1 px-3 rounded-full text-xs transition-colors">Wszystkie</button>`;
+
+            const categories = [...new Set(noteDatabase.map(item => item.category))];
+            categories.forEach(category => {
+                const button = document.createElement('button');
+                button.type = 'button'; // FIX: Dodano type="button" dla przycisków kategorii
+                button.textContent = category;
+                button.dataset.filter = category;
+                button.className = 'note-category-btn text-xs font-semibold py-1 px-3 rounded-full transition-colors ' +
+                                    (category === activeFilter ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300');
+                container.appendChild(button);
+            });
+
+            // Attach event listeners to filter buttons (now that they have the correct type, this is safe)
+            document.querySelectorAll('.note-category-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const filter = this.dataset.filter;
+                    renderNoteCategories(filter);
+                    renderNoteList(filter);
+                });
+            });
+        }
+
+        function renderNoteList(filter = '') {
+            const listContainer = document.getElementById('note-list');
+            listContainer.innerHTML = '';
+            
+            noteDatabase.forEach(categoryGroup => {
+                if (filter === '' || categoryGroup.category === filter) {
+                    categoryGroup.notes.forEach(noteText => {
+                        listContainer.appendChild(createNoteButton(noteText));
+                    });
+                }
+            });
+        }
+
+        // --- MODAL AND FORM LOGIC ---
+        
+        function openModal(modal) {
+            modal.classList.remove('invisible', 'opacity-0');
+            modal.classList.add('open', 'opacity-100');
+        }
+
+        function closeModal(modal) {
+            modal.classList.remove('open', 'opacity-100');
+            modal.classList.add('opacity-0');
+            setTimeout(() => modal.classList.add('invisible'), 300);
+        }
+
+        // ... (Pozostałe funkcje modali i formularzy - bez zmian) ...
+        
+        // ... (Kontynuacja kodu JS, aż do końca bloku script) ...
+        
+        function openControlModal(id = null) {
+            currentControlId = id;
+            controlForm.reset();
+            document.getElementById('delete-control-btn').classList.add('hidden');
+            document.getElementById('generate-protocol-btn').classList.add('hidden');
+            document.getElementById('modal-title').textContent = 'Dodaj nową kontrolę';
+            renderParticipantsCheckboxes();
+            
+            if (id !== null) {
+                const control = controls.find(c => c.id === id);
+                if (control) {
+                    document.getElementById('modal-title').textContent = 'Edytuj kontrolę';
+                    document.getElementById('control-street').value = control.street;
+                    document.getElementById('control-house-number').value = control.houseNumber;
+                    document.getElementById('control-city').value = control.city;
+                    document.getElementById('control-zip').value = control.zip;
+                    document.getElementById('control-type').value = control.type;
+                    document.getElementById('control-date').value = control.date;
+                    renderParticipantsCheckboxes(control.participants);
+
+                    document.getElementById('delete-control-btn').classList.remove('hidden');
+                    document.getElementById('generate-protocol-btn').classList.remove('hidden');
+                }
+            }
+
+            openModal(controlModal);
+        }
+
+        function openProtocolModal(controlId) {
+            const control = controls.find(c => c.id === controlId);
+            if (!control) return;
+
+            currentControlId = controlId;
+            protocolForm.reset();
+            currentProtocol = control.protocol || {};
+            photos = currentProtocol.photos || [];
+
+            // Uzupełnienie danych
+            document.getElementById('protocol-date').value = currentProtocol.date || control.date;
+            document.getElementById('protocol-case').value = currentProtocol.case || `Kontrola w sprawie gospodarowania odpadami komunalnymi na nieruchomości ${getFullAddress(control)}.`;
+            
+            // Uczestnicy z kontroli (Przedstawiciele Związku)
+            document.getElementById('protocol-union-reps').value = (currentProtocol.unionReps || control.participants.join('\n')).trim();
+            document.getElementById('protocol-admin-reps').value = currentProtocol.adminReps || '';
+            
+            document.getElementById('protocol-parties').value = currentProtocol.parties || '';
+            document.getElementById('protocol-witnesses').value = currentProtocol.witnesses || '';
+            document.getElementById('protocol-findings').value = currentProtocol.findings || '';
+            
+            // Podpisy
+            unionSignaturePad.clear();
+            partiesSignaturePad.clear();
+            if (currentProtocol.unionSignature) unionSignaturePad.fromDataURL(currentProtocol.unionSignature);
+            if (currentProtocol.partiesSignature) partiesSignaturePad.fromDataURL(currentProtocol.partiesSignature);
+
+            // Zdjęcia
+            renderPhotos();
+            
+            // Notatki
+            renderNoteCategories();
+            renderNoteList();
+
+            openModal(protocolModal);
+        }
+
+        function openJointNoteModal() {
+            document.getElementById('joint-note-form').reset();
+            document.getElementById('joint-note-protocols-summary').classList.add('hidden');
+            document.getElementById('protocols-count').textContent = '';
+            document.getElementById('joint-note-participants-container').innerHTML = '';
+            document.getElementById('finalize-joint-note-btn').disabled = true;
+            
+            jointNoteSignaturePad.clear();
+
+            // Ustawienie domyślnej daty na dzisiaj
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('joint-note-date-filter').value = today;
+
+            openModal(jointNoteModal);
+        }
+
+        function saveControl() {
+            const street = document.getElementById('control-street').value.trim();
+            const houseNumber = document.getElementById('control-house-number').value.trim();
+            const city = document.getElementById('control-city').value.trim();
+            const zip = document.getElementById('control-zip').value.trim();
+            const type = document.getElementById('control-type').value;
+            const date = document.getElementById('control-date').value;
+            const participants = Array.from(document.querySelectorAll('#participants-container input:checked')).map(cb => cb.value);
+
+            const controlData = { street, houseNumber, city, zip, type, date, participants };
+            
+            if (currentControlId) {
+                const index = controls.findIndex(c => c.id === currentControlId);
+                if (index !== -1) {
+                    // Zachowaj protokół przy edycji kontroli
+                    controls[index] = { ...controls[index], ...controlData };
+                    showMessage('Kontrola zaktualizowana!', 'success');
+                }
+            } else {
+                controlData.id = Date.now().toString(); // Proste unikalne ID
+                controlData.protocol = null;
+                controls.push(controlData);
+                showMessage('Nowa kontrola dodana!', 'success');
+            }
+
+            saveData();
+            renderControls();
+            closeModal(controlModal);
+        }
+
+        function deleteControl() {
+            if (currentControlId && confirm('Czy na pewno chcesz usunąć tę kontrolę?')) {
+                controls = controls.filter(c => c.id !== currentControlId);
+                saveData();
+                renderControls();
+                closeModal(controlModal);
+                showMessage('Kontrola usunięta.', 'error');
+            }
+        }
+
+        function saveProtocol() {
+            const controlIndex = controls.findIndex(c => c.id === currentControlId);
+            if (controlIndex === -1) return;
+
+            currentProtocol = {
+                date: document.getElementById('protocol-date').value,
+                case: document.getElementById('protocol-case').value.trim(),
+                unionReps: document.getElementById('protocol-union-reps').value.trim(),
+                adminReps: document.getElementById('protocol-admin-reps').value.trim(),
+                parties: document.getElementById('protocol-parties').value.trim(),
+                witnesses: document.getElementById('protocol-witnesses').value.trim(),
+                findings: document.getElementById('protocol-findings').value.trim(),
+                photos: photos,
+                unionSignature: unionSignaturePad.isEmpty() ? null : unionSignaturePad.toDataURL(),
+                partiesSignature: partiesSignaturePad.isEmpty() ? null : partiesSignaturePad.toDataURL(),
+            };
+
+            controls[controlIndex].protocol = currentProtocol;
+            saveData();
+            renderControls();
+            showMessage('Protokół został zapisany!', 'success');
+        }
+
+        function deleteProtocol() {
+            const controlIndex = controls.findIndex(c => c.id === currentControlId);
+            if (controlIndex === -1) return;
+
+            if (confirm('Czy na pewno chcesz usunąć protokół z tej kontroli?')) {
+                controls[controlIndex].protocol = null;
+                saveData();
+                renderControls();
+                closeModal(protocolModal);
+                showMessage('Protokół został usunięty.', 'error');
+            }
+        }
+
+        function handlePhotoSelection(event) {
+            Array.from(event.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    photos.push({ id: Date.now().toString() + Math.random(), url: e.target.result });
+                    renderPhotos();
+                };
+                reader.readAsDataURL(file);
+            });
+            event.target.value = ''; // Resetuj input, aby umożliwić ponowne wybranie tego samego pliku
+        }
+
+        function renderPhotos() {
+            const container = document.getElementById('photos-preview-container');
+            container.innerHTML = '';
+            photos.forEach(photo => {
+                const div = document.createElement('div');
+                div.className = 'relative w-24 h-24';
+                div.innerHTML = `
+                    <img src="${photo.url}" class="w-full h-full object-cover rounded shadow-md cursor-pointer" onclick="openPhotoPreview('${photo.url}')">
+                    <button type="button" class="absolute top-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center p-0 leading-none -mt-1 -mr-1" onclick="deletePhoto('${photo.id}')">&times;</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function deletePhoto(id) {
+            photos = photos.filter(p => p.id !== id);
+            renderPhotos();
+        }
+
+        function saveData() {
+            localStorage.setItem('controls', JSON.stringify(controls));
+        }
+
+        // --- PDF GENERATION LOGIC ---
+
+        // ... (Kod generujący PDF pozostaje bez zmian) ...
+        
+        // Funkcja do generowania i pobierania protokołu (PDF)
+        async function generateProtocolPDF() {
+            const control = controls.find(c => c.id === currentControlId);
+            if (!control || !control.protocol) {
+                showMessage('Brak zapisanego protokołu do wygenerowania!', 'error');
+                return;
+            }
+
+            // Upewnij się, że protokół jest zapisany przed generacją
+            saveProtocol(); 
+            
+            const protocol = control.protocol;
+            const fullAddress = getFullAddress(control);
+            const formattedDate = formatDate(protocol.date);
+
+            // Przygotowanie danych do PDF
+            let htmlContent = `
+                <div id="protocol-pdf-content" class="text-sm leading-relaxed p-6 w-[794px] h-auto font-sans">
+                    <div class="text-center mb-6">
+                        <h1 class="text-lg font-bold mb-1">PROTOKÓŁ OGLĘDZIN</h1>
+                        <p class="text-base font-medium">Sporządzony w dniu: ${formattedDate} w ${protocol.date.split('-')[0]} r.</p>
+                        <p class="text-base font-medium">W miejscowości: ${control.city}</p>
+                    </div>
+                    
+                    <p class="mb-4"><strong>Sprawa:</strong> ${protocol.case}</p>
+
+                    <p class="mb-2 font-semibold">I. Obecni przy oględzinach:</p>
+                    <ul class="list-disc ml-6 mb-4 space-y-1">
+                        <li><strong>Przedstawiciele Związku Gmin:</strong><br>${protocol.unionReps.split('\n').filter(l => l.trim() !== '').map(l => l.trim()).join('<br>')}</li>
+                        ${protocol.adminReps.trim() ? `<li><strong>Inni przedstawiciele organów administracji:</strong><br>${protocol.adminReps.split('\n').filter(l => l.trim() !== '').map(l => l.trim()).join('<br>')}</li>` : ''}
+                        ${protocol.parties.trim() ? `<li><strong>Strony i ich pełnomocnicy:</strong><br>${protocol.parties.split('\n').filter(l => l.trim() !== '').map(l => l.trim()).join('<br>')}</li>` : ''}
+                        ${protocol.witnesses.trim() ? `<li><strong>Świadkowie:</strong><br>${protocol.witnesses.split('\n').filter(l => l.trim() !== '').map(l => l.trim()).join('<br>')}</li>` : ''}
+                    </ul>
+                    
+                    <p class="mb-2 font-semibold">II. Miejsce oględzin:</p>
+                    <p class="mb-4 ml-4">${fullAddress}</p>
+
+                    <p class="mb-2 font-semibold">III. Ustalono co następuje (opis stanu faktycznego):</p>
+                    <div class="border border-gray-300 p-3 bg-gray-50 mb-6 whitespace-pre-wrap">${protocol.findings}</div>
+                    
+                    ${protocol.photos && protocol.photos.length > 0 ? `
+                        <p class="mb-2 font-semibold">IV. Dokumentacja fotograficzna (liczba zdjęć: ${protocol.photos.length}):</p>
+                        <div class="flex flex-wrap gap-4 mb-6">
+                            ${protocol.photos.map((photo, index) => `
+                                <div class="w-48 h-auto">
+                                    <img src="${photo.url}" class="w-full h-auto object-contain border border-gray-300">
+                                    <p class="text-xs text-center mt-1">Fot. ${index + 1}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    <p class="mb-8 mt-12 font-semibold text-center">IV. Podpisy</p>
+                    <div class="grid grid-cols-2 gap-12 mt-4">
+                        <div class="text-center">
+                            ${protocol.unionSignature ? `<img src="${protocol.unionSignature}" class="w-full h-24 object-contain border-b border-gray-800 mb-2">` : '<div class="w-full h-24 border-b border-gray-800 mb-2"></div>'}
+                            <p class="text-xs">Podpis przedstawicieli Związku</p>
+                        </div>
+                        <div class="text-center">
+                            ${protocol.partiesSignature ? `<img src="${protocol.partiesSignature}" class="w-full h-24 object-contain border-b border-gray-800 mb-2">` : '<div class="w-full h-24 border-b border-gray-800 mb-2"></div>'}
+                            <p class="text-xs">Podpis stron i osób obecnych</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            pdfContentContainer.innerHTML = htmlContent;
+            
+            // Konwersja do PDF
+            const pdf = new jspdf.jsPDF({
+                unit: 'pt',
+                format: 'a4',
+                orientation: 'portrait'
+            });
+
+            const element = document.getElementById('protocol-pdf-content');
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const margin = 30; // Margines
+            const targetWidth = pdfWidth - 2 * margin;
+
+            await html2canvas(element, { scale: 2 }).then((canvas) => {
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const imgHeight = canvas.height * targetWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'JPEG', margin, margin, targetWidth, imgHeight);
+                heightLeft -= pdf.internal.pageSize.getHeight() - 2 * margin;
+                position = -(pdf.internal.pageSize.getHeight() - margin);
+
+                while (heightLeft > 0) {
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', margin, position, targetWidth, imgHeight);
+                    heightLeft -= pdf.internal.pageSize.getHeight();
+                    position -= pdf.internal.pageSize.getHeight();
+                }
+
+                pdf.save(`Protokol_Ogledzin_${control.street}_${control.houseNumber}_${protocol.date}.pdf`);
+                showMessage('Protokół PDF wygenerowany pomyślnie!', 'success');
+            }).catch(error => {
+                console.error("Błąd podczas generowania PDF:", error);
+                showMessage('Błąd podczas generowania protokołu PDF.', 'error');
+            });
+            
+            pdfContentContainer.innerHTML = ''; // Wyczyść kontener
+            closeModal(protocolModal);
+        }
+
+        // Funkcja do filtrowania protokołów i przygotowania danych do Notatki Służbowej
+        function filterJointNoteProtocols() {
+            const dateFilter = document.getElementById('joint-note-date-filter').value;
+            const summaryBox = document.getElementById('joint-note-protocols-summary');
+            const protocolsCountP = document.getElementById('protocols-count');
+            const participantsContainer = document.getElementById('joint-note-participants-container');
+            const finalizeBtn = document.getElementById('finalize-joint-note-btn');
+
+            participantsContainer.innerHTML = '';
+            finalizeBtn.disabled = true;
+            
+            if (!dateFilter) {
+                summaryBox.classList.add('hidden');
+                showMessage('Wybierz datę, aby przefiltrować protokoły.', 'info');
+                return;
+            }
+
+            const filteredControls = controls.filter(c => 
+                c.date === dateFilter && c.protocol
+            );
+            
+            const validProtocols = filteredControls.map(c => c.protocol);
+
+            if (validProtocols.length === 0) {
+                protocolsCountP.textContent = `Nie znaleziono zapisanych protokołów z dnia ${formatDate(dateFilter)}.`;
+                summaryBox.classList.remove('hidden');
+                showMessage('Brak protokołów do połączenia.', 'error');
+                return;
+            }
+
+            // Unikalni uczestnicy (Przedstawiciele Związku)
+            const uniqueParticipants = new Set();
+            validProtocols.forEach(p => {
+                p.unionReps.split('\n').map(r => r.trim()).filter(r => r).forEach(r => uniqueParticipants.add(r));
+            });
+            
+            const participantsList = Array.from(uniqueParticipants).sort();
+
+            protocolsCountP.textContent = `Znaleziono ${validProtocols.length} protokołów z dnia ${formatDate(dateFilter)} gotowych do połączenia:`;
+            summaryBox.classList.remove('hidden');
+            
+            participantsList.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'text-sm text-gray-700 p-2 bg-white border border-gray-300 rounded';
+                div.textContent = p;
+                participantsContainer.appendChild(div);
+            });
+            
+            finalizeBtn.disabled = false;
+        }
+
+        // Funkcja do generowania i pobierania Wspólnej Notatki Służbowej (PDF)
+        async function generateJointNotePDF() {
+            const dateFilter = document.getElementById('joint-note-date-filter').value;
+            const city = document.getElementById('joint-note-city').value.trim();
+            const subject = document.getElementById('joint-note-subject').value.trim();
+            const signatureData = jointNoteSignaturePad.isEmpty() ? null : jointNoteSignaturePad.toDataURL();
+            
+            if (!dateFilter || !city || !subject) {
+                showMessage('Wypełnij wszystkie wymagane pola przed generacją notatki.', 'error');
+                return;
+            }
+
+            const filteredControls = controls.filter(c => 
+                c.date === dateFilter && c.protocol
+            );
+            
+            const protocols = filteredControls.map(c => ({
+                control: c,
+                protocol: c.protocol
+            }));
+
+            if (protocols.length === 0) {
+                showMessage('Brak protokołów do połączenia. Najpierw je zapisz.', 'error');
+                return;
+            }
+
+            // Unikalni uczestnicy
+            const uniqueParticipants = new Set();
+            protocols.forEach(p => {
+                p.protocol.unionReps.split('\n').map(r => r.trim()).filter(r => r).forEach(r => uniqueParticipants.add(r));
+            });
+            const participantsText = Array.from(uniqueParticipants).sort().join('<br>');
+            
+            // Połączone ustalenia
+            const findingsContent = protocols.map((p, index) => {
+                const fullAddress = getFullAddress(p.control);
+                return `
+                    <div class="mb-4">
+                        <p class="font-semibold text-sm">Protokół nr ${index + 1}: ${fullAddress}</p>
+                        <div class="ml-4 text-xs whitespace-pre-wrap">${p.protocol.findings}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Przygotowanie HTML
+            let htmlContent = `
+                <div id="joint-note-pdf-content" class="text-sm leading-relaxed p-6 w-[794px] h-auto font-sans">
+                    <div class="text-center mb-6">
+                        <h1 class="text-lg font-bold mb-1">WSPÓLNA NOTATKA SŁUŻBOWA</h1>
+                        <p class="text-base font-medium">Sporządzona w dniu: ${formatDate(dateFilter)} w ${dateFilter.split('-')[0]} r. w miejscowości ${city}</p>
+                    </div>
+
+                    <p class="mb-2 font-semibold">I. Autorzy Notatki :</p>
+                    <div class="ml-4 mb-4">${participantsText}</div>
+
+                    <p class="mb-2 font-semibold">II. Uwagi :</p>
+                    <div class="ml-4 mb-4">${subject}</div>
+
+                    <p class="mb-2 font-semibold">III. Streszczenie ustaleń z oględzin przeprowadzonych w dniu ${formatDate(dateFilter)} (łączna liczba protokołów: ${protocols.length}):</p>
+                    <div class="border border-gray-300 p-3 bg-gray-50 mb-6">${findingsContent}</div>
+                    
+                    <p class="mb-8 mt-12 font-semibold text-center">IV. Podpis</p>
+                    <div class="grid grid-cols-3 mt-4">
+                        <div></div>
+                        <div></div>
+                        <div class="text-center">
+                            ${signatureData ? `<img src="${signatureData}" class="w-full h-24 object-contain border-b border-gray-800 mb-2">` : '<div class="w-full h-24 border-b border-gray-800 mb-2"></div>'}
+                            <p class="text-xs">Podpis</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            pdfContentContainer.innerHTML = htmlContent;
+
+            // Konwersja do PDF
+            const pdf = new jspdf.jsPDF({
+                unit: 'pt',
+                format: 'a4',
+                orientation: 'portrait'
+            });
+
+            const element = document.getElementById('joint-note-pdf-content');
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const margin = 30; // Margines
+            const targetWidth = pdfWidth - 2 * margin;
+
+            await html2canvas(element, { scale: 2 }).then((canvas) => {
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const imgHeight = canvas.height * targetWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'JPEG', margin, margin, targetWidth, imgHeight);
+                heightLeft -= pdf.internal.pageSize.getHeight() - 2 * margin;
+                position = -(pdf.internal.pageSize.getHeight() - margin);
+
+                while (heightLeft > 0) {
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', margin, position, targetWidth, imgHeight);
+                    heightLeft -= pdf.internal.pageSize.getHeight();
+                    position -= pdf.internal.pageSize.getHeight();
+                }
+
+                pdf.save(`Notatka_Sluzbowa_Zbiorcza_${dateFilter}.pdf`);
+                showMessage('Notatka Służbowa PDF wygenerowana pomyślnie!', 'success');
+            }).catch(error => {
+                console.error("Błąd podczas generowania Notatki PDF:", error);
+                showMessage('Błąd podczas generowania Notatki Służbowej PDF.', 'error');
+            });
+
+            pdfContentContainer.innerHTML = ''; 
+            closeModal(jointNoteModal);
+        }
+
+        // --- LISTENERS I INICJALIZACJA ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDatalists();
+            renderControls();
+
+            // Inicjalizacja Signature Pads
+            unionSignaturePad = new SignaturePad(document.getElementById('union-signature-pad'));
+            partiesSignaturePad = new SignaturePad(document.getElementById('parties-signature-pad'));
+            jointNoteSignaturePad = new SignaturePad(document.getElementById('joint-note-signature-pad'));
+
+            // Walidacja kodów pocztowych dla autouzupełniania
+            document.getElementById('control-city').addEventListener('change', function() {
+                const city = this.value;
+                const zipInput = document.getElementById('control-zip');
+                if (zipCodesByCity[city]) {
+                    zipInput.value = zipCodesByCity[city];
+                }
+            });
+
+            // Modal Control
+            document.getElementById('add-control-btn').addEventListener('click', () => openControlModal());
+            document.getElementById('close-modal-btn').addEventListener('click', () => closeModal(controlModal));
+            controlForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveControl();
+            });
+            document.getElementById('delete-control-btn').addEventListener('click', deleteControl);
+            document.getElementById('generate-protocol-btn').addEventListener('click', () => openProtocolModal(currentControlId));
+
+            // Modal Protokół
+            document.getElementById('close-protocol-modal-btn').addEventListener('click', () => closeModal(protocolModal));
+            document.getElementById('save-protocol-btn').addEventListener('click', saveProtocol);
+            document.getElementById('delete-protocol-btn').addEventListener('click', deleteProtocol);
+            document.getElementById('finalize-protocol-btn').addEventListener('click', generateProtocolPDF);
+            document.getElementById('protocol-photos-input').addEventListener('change', handlePhotoSelection);
+            
+            document.getElementById('clear-union-signature').addEventListener('click', () => unionSignaturePad.clear());
+            document.getElementById('clear-parties-signature').addEventListener('click', () => partiesSignaturePad.clear());
+            
+            // Modal Notatka Służbowa
+            document.getElementById('add-joint-note-btn').addEventListener('click', openJointNoteModal);
+            document.getElementById('close-joint-note-modal-btn').addEventListener('click', () => closeModal(jointNoteModal));
+            document.getElementById('filter-joint-note-btn').addEventListener('click', filterJointNoteProtocols);
+            document.getElementById('finalize-joint-note-btn').addEventListener('click', generateJointNotePDF);
+            document.getElementById('clear-joint-note-signature').addEventListener('click', () => jointNoteSignaturePad.clear());
+            
+            // Filtrowanie głównej listy
+            const filterAddressInput = document.getElementById('filter-address');
+            const filterTypeSelect = document.getElementById('filter-type');
+
+            filterAddressInput.addEventListener('input', () => {
+                const query = filterAddressInput.value.toLowerCase();
+                const type = filterTypeSelect.value;
+                let filtered = controls;
+
+                if (query) {
+                    filtered = filtered.filter(control => 
+                        `${control.street} ${control.houseNumber}, ${control.city}`.toLowerCase().includes(query)
+                    );
+                }
+                if (type) {
+                    filtered = filtered.filter(control => control.type === type);
+                }
+                renderControls(filtered);
+            });
+
+            filterTypeSelect.addEventListener('change', () => {
+                const type = filterTypeSelect.value;
+                const query = filterAddressInput.value.toLowerCase();
+                let filtered = controls;
+
+                if (query) {
+                    filtered = filtered.filter(control => 
+                        `${control.street} ${control.houseNumber}, ${control.city}`.toLowerCase().includes(query)
+                    );
+                }
+                if (type) {
+                    filtered = filtered.filter(control => control.type === type);
+                }
+                renderControls(filtered);
+            });
+            
+            document.getElementById('clear-all-btn').addEventListener('click', () => {
+                if (confirm('Czy na pewno chcesz usunąć WSZYSTKIE kontrole? Tej operacji nie można cofnąć.')) {
+                    controls = [];
+                    saveData();
+                    renderControls();
+                    showMessage('Wszystkie kontrole zostały usunięte!', 'success');
+                }
+            });
+
+            renderControls();
+        });
+        
+        // KRYTYCZNA ZMIANA PWA 2: REJESTRACJA SERVICE WORKERA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Użycie /sw.js - nazwa pliku musi być zmieniona z sw.js.txt na sw.js na serwerze!
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('Service Worker zarejestrowany:', registration);
+                    })
+                    .catch(error => {
+                        console.log('Rejestracja Service Workera nie powiodła się:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
