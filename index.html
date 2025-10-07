@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Zarządzania Kontrolami</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            min-height: 100vh;
+        }
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal.open .modal-content {
+            transform: translateY(0);
+        }
+        .participant-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2px solid #d1d5db;
+            border-radius: 0.25rem;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+        }
+        .participant-checkbox:checked {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+        .participant-checkbox:checked::before {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 0.875rem;
+        }
+        .signature-pad {
+            border: 2px solid #3b82f6;
+            background-color: #fff;
+            cursor: crosshair;
+            touch-action: none;
+            height: 12rem;
+        }
+        .pdf-container {
+            width: 700px;
+            padding: 20px;
+            background-color: white;
+            font-size: 12px;
+        }
+        .pdf-container table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        .pdf-container th, .pdf-container td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            font-size: 12px;
+        }
+        .pdf-container h3 {
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 1px solid #ccc;
+            margin-top: 15px;
+            padding-bottom: 5px;
+        }
+        .pdf-container p {
+            margin-bottom: 8px;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+        .tab-button.active {
+            border-color: #2563eb;
+            color: #2563eb;
+            background-color: #eff6ff;
+        }
+        #identification-map { height: 400px; }
+        .leaflet-crosshair { cursor: crosshair; }
+        .center-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 25px;
+            height: 41px;
+            margin-left: -12.5px;
+            margin-top: -41px;
+            pointer-events: none;
+            background-image: url('https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 1000;
+        }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div id="auth-view" class="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm text-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Logowanie do Kontroli MZMGO</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <input type="email" id="login-email" placeholder="Adres e-mail" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email">
+                </div>
+                <div>
+                    <input type="password" id="login-password" placeholder="Hasło" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-300">Zaloguj</button>
+            </form>
+            <p id="auth-error-message" class="text-red-500 text-sm mt-4 hidden"></p>
+        </div>
+    </div>
+    
+    <div id="app-view" class="hidden">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Panel Zarządzania (Lokalny)</h1>
+            <button id="logout-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg shadow-md transition-colors duration-300 text-sm">Wyloguj</button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-4xl mx-auto">
+            <p class="text-xs text-gray-500 mb-4">Zalogowany jako: <span id="user-email" class="font-medium"></span> <span class="ml-4 font-bold text-blue-500"> (Tryb Lokalny)</span></p>
+            
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+                    <button id="tab-controls" class="tab-button active whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
+                        Kontrole
+                    </button>
+                    <button id="tab-identifications" class="tab-button whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Identyfikacja w Terenie
+                    </button>
+                </nav>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                <h3 class="font-bold text-gray-700 mb-2">Zarządzanie Danymi</h3>
+                <div class="flex flex-wrap gap-4">
+                    <button id="export-data-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md text-sm">Eksportuj Kopię Danych</button>
+                    <button id="import-data-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md text-sm">Importuj Kopię Danych</button>
+                    <input type="file" id="import-file-input" class="hidden" accept=".json,.txt">
+                </div>
+            </div>
+            
+            <div id="controls-content-view">
+                 <div class="flex flex-wrap gap-4 mb-6">
+                    <input type="text" id="filter-address" placeholder="Filtruj kontrole po adresie..." class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]">
+                    <select type="text" id="filter-type" class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Wszystkie typy kontroli</option>
+                        <option value="planowa">Planowa</option>
+                        <option value="interwencyjna">Interwencyjna</option>
+                    </select>
+                    <button id="add-control-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Dodaj kontrolę</button>
+                    <button id="add-joint-note-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Notatka Służbowa</button>
+                    <button id="clear-controls-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Wyczyść kontrole</button>
+                </div>
+                <div id="controls-list" class="space-y-4 mt-6"></div>
+            </div>
+
+            <div id="identifications-content-view" class="hidden">
+                 <div class="flex flex-wrap gap-4 mb-6">
+                    <button id="add-identification-btn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Nowa Identyfikacja</button>
+                    <button id="clear-identifications-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Wyczyść identyfikacje</button>
+                 </div>
+                <div id="identifications-list" class="space-y-4 mt-6"></div>
+            </div>
+        </div>
+
+        <div id="message-box" class="fixed bottom-8 right-8 p-4 rounded-lg text-white shadow-lg z-50 transition-opacity duration-300 opacity-0 hidden"></div>
+    </div>
+    
+    <div id="control-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title" class="text-2xl font-bold text-gray-800">Dodaj nową kontrolę</h2>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <form id="control-form" class="space-y-4">
+                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                    <div class="flex-1">
+                        <label for="control-street" class="block text-gray-700 font-medium mb-1">Ulica</label>
+                        <input type="text" id="control-street" required list="street-suggestions" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <datalist id="street-suggestions"></datalist>
+                    </div>
+                    <div class="flex-1">
+                        <label for="control-house-number" class="block text-gray-700 font-medium mb-1">Numer domu</label>
+                        <input type="text" id="control-house-number" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                    <div class="flex-1">
+                        <label for="control-city" class="block text-gray-700 font-medium mb-1">Miejscowość</label>
+                        <input type="text" id="control-city" required list="city-suggestions" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <datalist id="city-suggestions"></datalist>
+                    </div>
+                    <div class="flex-1">
+                        <label for="control-zip" class="block text-gray-700 font-medium mb-1">Kod pocztowy</label>
+                        <input type="text" id="control-zip" required pattern="[0-9]{2}-[0-9]{3}" placeholder="np. 12-345" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                    <div class="flex-1">
+                        <label for="control-plot-number" class="block text-gray-700 font-medium mb-1">Numer Działki (opcjonalnie)</label>
+                        <input type="text" id="control-plot-number" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex-1">
+                        <label for="control-geodetic-district" class="block text-gray-700 font-medium mb-1">Obręb Ewidencyjny (opcjonalnie)</label>
+                        <input type="text" id="control-geodetic-district" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label for="control-type" class="block text-gray-700 font-medium mb-1">Typ</label>
+                    <select id="control-type" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="planowa">Planowa</option>
+                        <option value="interwencyjna">Interwencyjna</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="control-date" class="block text-gray-700 font-medium mb-1">Data</label>
+                    <input type="date" id="control-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-gray-700 font-medium">Uczestnicy</label>
+                    <div id="participants-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        </div>
+                </div>
+                <div class="flex space-x-4">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Zapisz</button>
+                    <button type="button" id="delete-control-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Usuń</button>
+                    <button type="button" id="generate-protocol-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Generuj protokół</button>
+                </div>
+                <div class="pt-4 border-t mt-4">
+                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Powrót do panelu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="protocol-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Generowanie Protokołu Oględzin</h2>
+                <button id="close-protocol-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <form id="protocol-form" class="space-y-4">
+                <div>
+                    <label for="protocol-date" class="block text-gray-700 font-medium mb-1">Data oględzin</label>
+                    <input type="date" id="protocol-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="protocol-case" class="block text-gray-700 font-medium mb-1">Sprawa</label>
+                    <textarea id="protocol-case" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-gray-700 font-medium">Obecni</label>
+                    <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                        <div class="flex-1">
+                            <label for="protocol-union-reps" class="block text-gray-700 mb-1">Przedstawiciele Związku</label>
+                            <textarea id="protocol-union-reps" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                            <div class="mt-2 text-sm text-gray-500">Automatycznie uzupełnione z danych kontroli.</div>
+                        </div>
+                        <div class="flex-1">
+                            <label for="protocol-admin-reps" class="block text-gray-700 mb-1">Inni przedstawiciele organów administracji</label>
+                            <textarea id="protocol-admin-reps" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label for="protocol-parties" class="block text-gray-700 font-medium mb-1">Strony i ich pełnomocnicy</label>
+                    <textarea id="protocol-parties" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div>
+                    <label for="protocol-witnesses" class="block text-gray-700 font-medium mb-1">Świadkowie</label>
+                    <textarea id="protocol-witnesses" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="note-selection-container p-4 bg-gray-100 rounded-lg">
+                    <label class="block text-gray-700 font-medium mb-2">Dodaj notatki</label>
+                    <div id="note-categories" class="flex flex-wrap gap-2 mb-2"></div>
+                    <div id="note-list" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div>
+                    <label for="protocol-findings" class="block text-gray-700 font-medium mb-1">Ustalono co następuje</label>
+                    <textarea id="protocol-findings" rows="5" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="space-y-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <label class="block text-gray-700 font-medium mb-1">Dodaj zdjęcia z aparatu / pliku</label>
+                    <input type="file" id="protocol-photos-input" accept="image/*" multiple capture="environment" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <div id="photos-preview-container" class="mt-4 flex flex-wrap gap-3">
+                        </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Podpis przedstawicieli Związku</label>
+                        <canvas id="union-signature-pad" class="signature-pad w-full h-48"></canvas>
+                        <button type="button" id="clear-union-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Podpis stron i osób obecnych</label>
+                        <canvas id="parties-signature-pad" class="signature-pad w-full h-48"></canvas>
+                        <button type="button" id="clear-parties-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                    </div>
+                </div>
+                <div class="flex space-x-4">
+                    <button type="button" id="save-protocol-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Zapisz protokół</button>
+                    <button type="button" id="delete-protocol-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Usuń protokół</button>
+                    <button type="button" id="finalize-protocol-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Generuj i pobierz protokół</button>
+                </div>
+                <div class="pt-4 border-t mt-4">
+                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Powrót do panelu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="joint-note-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Notatka Służbowa (z Protokołów)</h2>
+                <button id="close-joint-note-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <form id="joint-note-form" class="space-y-4">
+                <div class="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
+                    <label for="joint-note-date-filter" class="block text-gray-700 font-medium mb-1">Data kontroli (do filtrowania)</label>
+                    <div class="flex space-x-2">
+                        <input type="date" id="joint-note-date-filter" required class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" id="filter-joint-note-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Filtruj protokoły</button>
+                    </div>
+                </div>
+                
+                <div id="joint-note-protocols-summary" class="space-y-4 p-4 bg-gray-50 rounded-lg hidden">
+                    <p id="protocols-count" class="font-semibold text-gray-700"></p>
+                    <p class="text-xs text-red-500">Uwaga: Wygenerowana notatka będzie zawierać tylko dane z protokołów, które zostały **wcześniej zapisane**.</p>
+                </div>
+
+                <div>
+                    <label for="joint-note-city" class="block text-gray-700 font-medium mb-1">Miejscowość sporządzenia</label>
+                    <input type="text" id="joint-note-city" value="Giżycko" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="joint-note-subject" class="block text-gray-700 font-medium mb-1"> Uwagi </label>
+                    <textarea id="joint-note-subject" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <div class="space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <label class="block text-gray-700 font-medium">Autorzy Notatki (pobrani z Protokółów)</label>
+                    <div id="joint-note-participants-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        </div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 font-medium mb-1">Podpis (opcjonalny)</label>
+                    <canvas id="joint-note-signature-pad" class="signature-pad w-full h-32"></canvas>
+                    <button type="button" id="clear-joint-note-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                </div>
+                <button type="button" id="finalize-joint-note-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 w-full" disabled>Generuj i pobierz Notatkę (PDF)</button>
+                <div class="pt-4 border-t mt-4">
+                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Powrót do panelu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="identification-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl transition-transform duration-300 flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="identification-modal-title" class="text-2xl font-bold text-gray-800">Nowa Identyfikacja Terenowa</h2>
+                <button id="close-identification-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <form id="identification-form" class="space-y-4 flex-1 flex flex-col">
+                <div id="identification-map-step" class="flex-1 flex flex-col">
+                    <div class="relative flex-1">
+                        <div id="identification-map" class="w-full h-full rounded-lg"></div>
+                        <div class="center-marker"></div>
+                    </div>
+                    <button type="button" id="capture-btn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 mt-4 text-lg">
+                        Zatwierdź lokalizację i zrób zdjęcie
+                    </button>
+                    <input type="file" id="identification-photo-input" accept="image/*" capture="environment" class="visually-hidden">
+                </div>
+
+                <div id="identification-preview-step" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Zdjęcie</label>
+                        <img id="identification-photo-preview" src="" class="w-full h-auto max-h-64 object-contain rounded-lg bg-gray-100 border">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Dane lokalizacyjne</label>
+                        <div class="p-3 bg-gray-50 rounded-lg border text-sm">
+                            <p><strong>Współrzędne GPS:</strong> <span id="gps-coords"></span></p>
+                            <p class="mt-2"><strong>Otwórz w mapie:</strong> <a id="open-map-link" href="#" target="_blank" class="text-blue-600 hover:underline">OpenStreetMap</a></p>
+                             <p class="mt-2"><strong>Sprawdź w systemie SIP:</strong> <a id="geoportal-link" href="#" target="_blank" class="text-blue-600 hover:underline">Geoportal.gov.pl (Identyfikuj działkę)</a></p>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="identification-plot-number" class="block text-gray-700 font-medium mb-1">Numer Działki</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="text" id="identification-plot-number" class="flex-1 w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Wpisz lub pobierz z geoportalu">
+                            <button type="button" id="fetch-address-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md text-sm">Pobierz dane</button>
+                        </div>
+                        <p id="address-status" class="text-xs mt-1 h-auto min-h-[1rem]"></p>
+                        <p class="text-xs text-gray-400 mt-1">Wskazówka: Jeśli dane nie zostały znalezione, spróbuj wskazać punkt bliżej budynku lub drogi.</p>
+                    </div>
+                    <div>
+                        <label for="identification-notes" class="block text-gray-700 font-medium mb-1">Notatki</label>
+                        <textarea id="identification-notes" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"></textarea>
+                    </div>
+                </div>
+
+                <div class="flex space-x-4 pt-4 border-t mt-4">
+                     <button type="button" id="save-identification-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Zapisz</button>
+                     <button type="button" id="delete-identification-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Usuń</button>
+                     <button type="button" id="generate-identification-pdf-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Generuj Raport PDF</button>
+                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Powrót</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="pdf-render-template" class="absolute -left-[9999px]">
+        </div>
+    
+    <script>
+        // --- KONFIGURACJA I INICJALIZACJA FIREBASE (TYLKO AUTH) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDFCV_dXKnqOn8yYbCSWSayOijB90MABv4",
+            authDomain: "kontrole-mzmgo.firebaseapp.com",
+            projectId: "kontrole-mzmgo",
+            storageBucket: "kontrole-mzmgo.firebasestorage.app",
+            messagingSenderId: "735699938419",
+            appId: "1:735699938419:web:a93e8015aa54a5ad910e06",
+            measurementId: "G-5XGG2FWWJX"
+        };
+
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        
+        // --- ZMIENNE GLOBALNE ---
+        let controls = []; 
+        let identifications = [];
+        let currentControlId = null;
+        let currentIdentificationId = null;
+        let photos = []; 
+        let currentProtocol;
+        let unionSignaturePad, partiesSignaturePad, jointNoteSignaturePad;
+        let identificationMap;
+        
+        const controlsContentView = document.getElementById('controls-content-view');
+        const identificationsContentView = document.getElementById('identifications-content-view');
+        const controlModal = document.getElementById('control-modal');
+        const controlForm = document.getElementById('control-form');
+        const protocolModal = document.getElementById('protocol-modal');
+        const protocolForm = document.getElementById('protocol-form');
+        const jointNoteModal = document.getElementById('joint-note-modal');
+        const identificationModal = document.getElementById('identification-modal');
+        const authView = document.getElementById('auth-view');
+        const appView = document.getElementById('app-view');
+        const pdfRenderTemplate = document.getElementById('pdf-render-template');
+
+        // --- OBSŁUGA DANYCH LOKALNYCH ---
+        function saveLocalControls() {
+            localStorage.setItem('localControls', JSON.stringify(controls));
+        }
+        function saveLocalIdentifications() {
+            localStorage.setItem('localIdentifications', JSON.stringify(identifications));
+        }
+
+        // --- OBSŁUGA LOGOWANIA ---
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorElement = document.getElementById('auth-error-message');
+            errorElement.classList.add('hidden');
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                console.error("Błąd logowania:", error.code, error.message);
+                errorElement.textContent = "Błąd logowania: Nieprawidłowy e-mail lub hasło.";
+                errorElement.classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            try {
+                await auth.signOut();
+                showMessage('Wylogowano pomyślnie.', 'info');
+            } catch (error) {
+                console.error("Błąd wylogowania:", error);
+            }
+        });
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('user-email').textContent = user.email;
+                authView.classList.add('hidden');
+                appView.classList.remove('hidden');
+                
+                controls = JSON.parse(localStorage.getItem('localControls')) || [];
+                identifications = JSON.parse(localStorage.getItem('localIdentifications')) || [];
+                applyFilters();
+                renderIdentifications();
+                
+                showMessage('Pomyślnie załadowano dane lokalne!', 'success');
+                scheduleAutoLogout();
+            } else {
+                controls = []; 
+                identifications = [];
+                renderControls([]); 
+                renderIdentifications([]);
+                authView.classList.remove('hidden');
+                appView.classList.add('hidden');
+            }
+        });
+        
+        // --- DANE STAŁE ---
+        const ulice = ["11 Listopada", "3 Maja", "Akacjowa", "Artyleryjska", "Batorego", "Bema", "Biskupa Łukasza", "Błotna", "Boczna", "Bożnicza", "Cicha", "Dębowa", "Dolna", "Dworcowa", "Działkowa", "Gdańska", "Giżycka", "Górna", "Grażyny", "Grenadierów", "Grunwaldzka", "Jagiełły", "Jana Pawła II", "Jeziorna", "Kacza", "Kętrzyńska", "Kilińskiego", "Klonowa", "Kolejowa", "Konarskiego", "Kopernika", "Kościelna", "Kościuszki", "Królowej Jadwigi", "Krótka", "Kruklińska", "Krzymińskiego", "Księdza Antoniego", "Księdza Michała", "Księdza Stanisława", "Kwiatowa", "Legionów", "Leśna", "Lipowa", "Lotnicza", "Łąkowa", "Mazurska", "Mickiewicza", "Moniuszki", "Nadbrzeżna", "Niepodległości", "Nowa", "Obwodnica", "Ogrodowa", "Olsztyńska", "Orzeszkowej", "Paderewskiego", "Parkowa", "Partyzantów", "Pasaż Portowy", "Piaskowa", "Piękna Góra", "Piłsudskiego", "Polna", "Portowa", "Przemysłowa", "Rondo Solidarności", "Rondo Żołnierzy Wyklętych", "Rynkowa", "Sikorskiego", "Słoneczna", "Sosnowa", "Spacerowa", "Sportowa", "Spółdzielcza", "Srebrna", "Stanisława Moniuszki", "Staszica", "Suwalska", "Szewska", "Szkolna", "Szpitalna", "Ślusarska", "Świderska", "Świerkowa", "Targowa", "Traugutta", "Wesoła", "Wileńska", "Wiosenna", "Witosa", "Wojska Polskiego", "Wrocławska", "Wyzwolenia", "Zamkowa", "Zatorze", "Zielona", "Żeromskiego", "Żeglarska", "Żywiczna"];
+        const miejscowosciByGmina = {
+            "Miasto Giżycko": ["Giżycko"], "Gmina Banie Mazurskie": ["Banie Mazurskie", "Gryżewo", "Jagiele", "Jagoczany", "Klewiny", "Kruki", "Lisy", "LIsiki", "Miczuły", "Mieduniszki Wielkie", "Mieczniki", "Rapa", "Rogale", "Rogalki", "Stary Żabin", "Żabin", "Żabinek", "Żabin Rybacki", "Zapały"], "Gmina Budry": ["Budry", "Budzewo", "Brzozówko", "Dąbrówka", "Droglewo", "Góry", "Grądy Węgorzewskie", "Ołownik", "Olszewo Węgorzewskie", "Więcki", "Zabrost Wielki"], "Gmina Giżycko": ["Antonowo", "Bogacko", "Bogaczewo", "Bystry", "Doba", "Gajewo", "Grajwo", "Guty", "Kamionki", "Kąp", "Kozin", "Kożuchy Małe", "Kożuchy Wielkie", "Kruklin", "Pieczonki", "Pierkunowo", "Piękna Góra", "Róg Pierkunowski", "Sołdany", "Spytkowo", "Sterławki Małe", "Sulimy", "Szczybały Giżyckie", "Świdry", "Upałty", "Upałty Małe", "Wilkaski", "Wilkasy", "Wronka", "Wrony"], "Gmina Kruklanki": ["Brożówka", "Diabla Góra", "Grądy Kruklaneckie", "Jeziorowskie", "Jurkowo", "Jurkówko", "Kamienna Struga", "Kruklanki", "Lipowo", "Łękuk Wielki", "Możdżany", "Wolisko", "Żabinka", "Żywki"], "Gmina Miłki": ["Miłki", "Bogaczewo", "Gawliki", "Jagodne Małe", "Jagodne Wielkie", "Jedrusy", "Kleszczewo", "Kozin", "Lisewo, Marcinowa Wola", "Paprotki", "Przykop", "Ruda", "Rydzewo", "Staświny", "Wyszowate"], "Miasto i Gmina Orzysz": ["Orzysz", "Drozdowo", "Dziubiele", "Dziubiele Małe", "Gaudynki", "Gorzekały", "Góra", "Grądy", "Grądy Podmiejskie", "Grzegorze", "Kamieńskie", "Klusy", "Mikosze", "Mikosze-Osada", "Nowa Wieś", "Nowe Guty", "Odoje", "Ogródek", "Okartowo", "Okartowo-Przystanek", "Okartowo-Tartak", "Osiki", "Pianki", "Rostki Skomackie", "Rzęśniki", "Strzelniki", "Sumki", "Szwejkówko", "Tuchlin", "Ublik", "Wężewo", "Wierzbiny"], "Gmina Pozezdrze": ["Pozezdrze", "Dziaduszyn", "Harsz", "Jakunówko", "Krzywińskie", "Kuty", "Pieczarki", "Piłaki Wielkie", "Przerwanki", "Przytuły", "Radziszewo", "Stręgielek", "Wyłudy"], "Miasto i Gmina Ryn": ["Ryn", "Bachorza", "Canki", "Dzikowizna", "Głąbowo", "Grzybowo", "Jeziorko", "Knis", "Kronowo", "Krzyżany", "Ławki", "Mioduńskie", "Monetki", "Orło", "Prażmowo", "Rybical", "Ryński Dwór", "Ryńskie Pole", "Siejkowo", "Skop", "Słabowo", "Stara Rudówka", "Sterławki Wielkie", "Szymonka", "Tros", "Wejdyki", "Zielony Lasek"], "Gmina Srokowo": ["Srokowo", "Bajory Małe", "Bajory Wielkie", "Jankowice", "Jegławki", "Kaczory", "Kosakowo", "Leśniewo", "Leśny Rów", "Łęknica", "Nowa Różanka", "Pieczarki", "Podlaski", "Różanka", "Silec", "Siwa Dziura", "Stare Różanki", "Wilkowo", "Wólka Węgorzewska", "Węgorzewo"]
+        };
+        const zipCodesByCity = { "Banie Mazurskie": "19-520", "Gryżewo": "19-520", "Jagiele": "19-520", "Jagoczany": "19-520", "Klewiny": "19-520", "Kruki": "19-520", "Lisy": "19-520", "LIsiki": "19-520", "Miczuły": "19-520", "Mieduniszki Wielkie": "19-520", "Mieczniki": "19-520", "Rapa": "19-520", "Rogale": "19-520", "Rogalki": "19-520", "Stary Żabin": "19-520", "Żabin": "19-520", "Żabinek": "19-520", "Żabin Rybacki": "19-520", "Zapały": "19-520", "Budry": "11-600", "Budzewo": "11-600", "Brzozówko": "11-600", "Dąbrówka": "11-600", "Droglewo": "11-600", "Góry": "11-600", "Grądy Węgorzewskie": "11-600", "Ołownik": "11-600", "Olszewo Węgorzewskie": "11-600", "Więcki": "11-600", "Zabrost Wielki": "11-600", "Antonowo": "11-500", "Bogacko": "11-500", "Bogaczewo": "11-500", "Bystry": "11-500", "Doba": "11-500", "Gajewo": "11-500", "Grajwo": "11-500", "Guty": "11-500", "Kamionki": "11-500", "Kąp": "11-500", "Kozin": "11-500", "Kożuchy Małe": "11-500", "Kożuchy Wielkie": "11-500", "Kruklin": "11-500", "Pieczonki": "11-500", "Pierkunowo": "11-500", "Piękna Góra": "11-500", "Róg Pierkunowski": "11-500", "Sołdany": "11-500", "Spytkowo": "11-500", "Sterławki Małe": "11-500", "Sulimy": "11-500", "Szczybały Giżyckie": "11-500", "Świdry": "11-500", "Upałty": "11-500", "Upałty Małe": "11-500", "Wilkaski": "11-500", "Wilkasy": "11-500", "Wronka": "11-500", "Wrony": "11-500", "Giżycko": "11-500", "Brożówka": "11-612", "Diabla Góra": "11-612", "Grądy Kruklaneckie": "11-612", "Jeziorowskie": "11-612", "Jurkowo": "11-612", "Jurkówko": "11-612", "Kamienna Struga": "11-612", "Kruklanki": "11-612", "Lipowo": "11-612", "Łękuk Wielki": "11-612", "Możdżany": "11-612", "Wolisko": "11-612", "Żabinka": "11-612", "Żywki": "11-612", "Miłki": "11-513", "Bogaczewo": "11-513", "Gawliki": "11-513", "Jagodne Małe": "11-513", "Jagodne Wielkie": "11-513", "Jedrusy": "11-513", "Kleszczewo": "11-513", "Lisewo, Marcinowa Wola": "11-513", "Paprotki": "11-513", "Przykop": "11-513", "Ruda": "11-513", "Rydzewo": "11-513", "Staświny": "11-513", "Wyszowate": "11-513", "Orzysz": "12-250", "Drozdowo": "12-250", "Dziubiele": "12-250", "Dziubiele Małe": "12-250", "Gaudynki": "12-250", "Gorzekały": "12-250", "Góra": "12-250", "Grądy": "12-250", "Grądy Podmiejskie": "12-250", "Grzegorze": "12-250", "Kamieńskie": "12-250", "Klusy": "12-250", "Mikosze": "12-250", "Mikosze-Osada": "12-250", "Nowa Wieś": "12-250", "Nowe Guty": "12-250", "Odoje": "12-250", "Ogródek": "12-250", "Okartowo": "12-250", "Okartowo-Przystanek": "12-250", "Okartowo-Tartak": "12-250", "Osiki": "12-250", "Pianki": "12-250", "Rostki Skomackie": "12-250", "Rzęśniki": "12-250", "Strzelniki": "12-250", "Sumki": "12-250", "Szwejkówko": "12-250", "Tuchlin": "12-250", "Ublik": "12-250", "Wężewo": "12-250", "Wierzbiny": "12-250", "Pozezdrze": "11-610", "Dziaduszyn": "11-610", "Harsz": "11-610", "Jakunówko": "11-610", "Krzywińskie": "11-610", "Kuty": "11-610", "Pieczarki": "11-610", "Piłaki Wielkie": "11-610", "Przerwanki": "11-610", "Przytuły": "11-610", "Radziszewo": "11-610", "Stręgielek": "11-610", "Wyłudy": "11-610", "Ryn": "11-520", "Bachorza": "11-520", "Canki": "11-520", "Dzikowizna": "11-520", "Głąbowo": "11-520", "Grzybowo": "11-520", "Jeziorko": "11-520", "Knis": "11-520", "Kronowo": "11-520", "Krzyżany": "11-520", "Ławki": "11-520", "Mioduńskie": "11-520", "Monetki": "11-520", "Orło": "11-520", "Prażmowo": "11-520", "Rybical": "11-520", "Ryński Dwór": "11-520", "Ryńskie Pole": "11-520", "Siejkowo": "11-520", "Skop": "11-520", "Słabowo": "11-520", "Stara Rudówka": "11-520", "Sterławki Wielkie": "11-520", "Szymonka": "11-520", "Tros": "11-520", "Wejdyki": "11-520", "Zielony Lasek": "11-520", "Srokowo": "11-610", "Bajory Małe": "11-610", "Bajory Wielkie": "11-610", "Jankowice": "11-610", "Jegławki": "11-610", "Kaczory": "11-610", "Kosakowo": "11-610", "Leśniewo": "11-610", "Leśny Rów": "11-610", "Łęknica": "11-610", "Nowa Różanka": "11-610", "Pieczarki": "11-610", "Podlaski": "11-610", "Różanka": "11-610", "Silec": "11-610", "Siwa Dziura": "11-610", "Stare Różanki": "11-610", "Wilkowo": "11-610", "Wólka Węgorzewska": "11-610", "Węgorzewo": "11-610", };
+        const availableParticipants = [ 'Daria Łucaś - insp. ds. kontroli i windykacji', 'Ewelina Bujniak - insp. ds. kontroli i windykacji', 'Krzysztof Balcerzak - podinsp. ds. kontroli i windykacji', 'Adam Sznip - insp. ds. kontroli i windykacji', ];
+        const noteDatabase = [ { category: "Brak dostępu", notes: ["Na nieruchomości nikogo nie zastano.", "Nieruchomość ogrodzona, brak możliwości wejścia na posesję.", "Brama zamknięta na kłódkę, nikt nie otwiera.", "Brak udostępnienia pojemników i dostępu do terenu kontroli.", "Pomimo wielokrotnego dzwonienia, nikt nie otworzył drzwi.", "Nieruchomość niezamieszkała/opuszczona.", "Brak kontaktu z właścicielem/użytkownikiem nieruchomości.", "Pod wskazanym adresem znajduje się pustostan."]}, { category: "Brak segregacji", notes: ["Brak segregacji odpadów komunalnych.", "Stwierdzono mieszanie frakcji odpadów w pojemniku na odpady zmieszane.", "Odpady BIO są zmieszane z innymi frakcjami.", "W pojemniku na odpady zmieszane znajdują się odpady segregowane (np. szkło, papier, plastik).", "W worku na szkło znajdują się inne frakcje (np. plastik).", "W worku na papier znajdują się inne frakcje (np. plastik, szkło).", "W worku na plastik znajdują się inne frakcje (np. szkło, papier).", "Brak oświadczenia o kompostowaniu odpadów BIO.", "Brak pojemników do segregacji na terenie nieruchomości."]}, { category: "Inne nieprawidłowości", notes: ["Brak oznaczenia pojemników.", "Pojemniki są przepełnione.", "Pojemniki i worki znajdują się poza terenem nieruchomości.", "Pojemniki są uszkodzone, nieszczelne.", "Stwierdzono zbieranie odpadów w sposób niezgodny z regulaminem.", "Brak pojemnika na odpady zmieszane/segregowane.", "Odpady wielkogabarytowe porzucone poza miejscem do tego przeznaczonym.", "Odpady budowlane/rozbiórkowe w pojemnikach na odpady komunalne."]}, { category: "Kompostownik", notes: ["Brak kompostownika na nieruchomości.", "Bioodpady kompostowane w sposób prawidłowy.", "Właściciel nieruchomości poinformowany o konieczności niezwłocznego poprawienia/zbudowania/zakupu kompostownika."]}, { category: "Prawidłowo", notes: ["Prawidłowa segregacja odpadów.", "Pojemniki są oznaczone i utrzymane w czystości.", "Brak uwag."]} ];
+
+
+        // --- UTILITIES ---
+        function showMessage(message, type = 'info') {
+            const box = document.getElementById('message-box');
+            box.textContent = message;
+            box.className = `fixed bottom-8 right-8 p-4 rounded-lg shadow-lg z-50 transition-opacity duration-300 opacity-100 block ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`;
+            setTimeout(() => {
+                box.classList.replace('opacity-100', 'opacity-0');
+                setTimeout(() => box.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        function scheduleAutoLogout() {
+            const now = new Date();
+            const logoutTime = new Date();
+            logoutTime.setHours(16, 0, 0, 0);
+            const delay = logoutTime.getTime() - now.getTime();
+            if (delay < 0) return;
+            setTimeout(() => {
+                if (auth.currentUser) auth.signOut();
+            }, delay);
+        }
+
+        function getFullAddress(control) {
+            return `${control.street} ${control.houseNumber}, ${control.city} ${control.zip}`;
+        }
+
+        function formatType(type) {
+            return type === 'planowa' ? 'Planowa' : 'Interwencyjna';
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('pl-PL') + ' ' + date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit'});
+        }
+        
+        function getTimestampForFilename() {
+            const d = new Date();
+            const pad = (n) => n.toString().padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+        }
+
+        // --- RENDER FUNCTIONS ---
+        function renderDatalists() {
+            const streetDatalist = document.getElementById('street-suggestions');
+            streetDatalist.innerHTML = ulice.map(u => `<option value="${u}">`).join('');
+            const cityDatalist = document.getElementById('city-suggestions');
+            cityDatalist.innerHTML = Object.values(miejscowosciByGmina).flat().map(m => `<option value="${m}">`).join('');
+        }
+
+        function renderParticipantsCheckboxes(selectedParticipants = []) {
+            const container = document.getElementById('participants-container');
+            container.innerHTML = '';
+            availableParticipants.forEach(p => {
+                const isChecked = selectedParticipants.includes(p);
+                const id = p.replace(/\s+/g, '-').toLowerCase();
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-2';
+                div.innerHTML = `
+                    <input type="checkbox" id="${id}" name="participant" value="${p}" ${isChecked ? 'checked' : ''} class="participant-checkbox">
+                    <label for="${id}" class="text-sm text-gray-700">${p}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderControls(data = controls) {
+            const list = document.getElementById('controls-list');
+            list.innerHTML = '';
+            if (!data || data.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500 p-8 border border-gray-200 rounded-lg">Brak zapisanych kontroli w pamięci lokalnej.</p>';
+                return;
+            }
+            data.sort((a, b) => new Date(b.date) - new Date(a.date));
+            data.forEach(control => {
+                const hasProtocol = control.protocol && control.protocol.findings;
+                const item = document.createElement('div');
+                item.className = 'bg-gray-50 p-4 border border-gray-200 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0';
+                item.innerHTML = `
+                    <div>
+                        <p class="text-lg font-semibold text-gray-800">${getFullAddress(control)}</p>
+                        <p class="text-sm text-gray-600">${formatType(control.type)} | Data: ${formatDate(control.date)}</p>
+                        <p class="text-xs ${hasProtocol ? 'text-green-600' : 'text-red-500'} font-medium mt-1">Protokół: ${hasProtocol ? 'Zapisany' : 'Brak'}</p>
+                    </div>
+                    <button data-id="${control.id}" class="edit-btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-300 text-sm w-full sm:w-auto">Edytuj / Protokół</button>
+                `;
+                list.appendChild(item);
+            });
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.dataset.id;
+                    openControlModal(id);
+                });
+            });
+        }
+
+        function renderIdentifications(data = identifications) {
+            const list = document.getElementById('identifications-list');
+            list.innerHTML = '';
+            if (!data || data.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500 p-8 border border-gray-200 rounded-lg">Brak zapisanych identyfikacji w pamięci lokalnej.</p>';
+                return;
+            }
+            data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            data.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-50 p-4 border border-gray-200 rounded-lg shadow-sm flex items-center space-x-4 cursor-pointer hover:bg-gray-100';
+                div.dataset.id = item.id;
+                div.innerHTML = `
+                    <img src="${item.photo}" class="w-20 h-20 object-cover rounded-md bg-gray-200">
+                    <div>
+                        <p class="font-semibold text-gray-800">Identyfikacja z dnia:</p>
+                        <p class="text-sm text-gray-600">${formatDate(item.timestamp)}</p>
+                        ${item.plotNumber ? `<p class="text-sm text-teal-700 font-medium mt-1">Działka: ${item.plotNumber}</p>` : ''}
+                        <p class="text-xs text-gray-500 mt-1">${(item.notes || '').substring(0, 50)}...</p>
+                    </div>
+                `;
+                list.appendChild(div);
+                div.addEventListener('click', () => openIdentificationModal(item.id));
+            });
+        }
+        
+        function createNoteButton(noteText) {
+            const button = document.createElement('button');
+            button.type = 'button'; 
+            button.textContent = noteText;
+            button.className = 'text-xs bg-white text-gray-800 border border-gray-300 py-1 px-2 rounded-lg hover:bg-gray-100 transition-colors duration-150 text-left shadow-sm';
+            button.onclick = () => {
+                const findings = document.getElementById('protocol-findings');
+                const separator = findings.value.trim().endsWith('\n') || findings.value.length === 0 ? '' : '\n';
+                findings.value += separator + noteText + '\n';
+            };
+            return button;
+        }
+
+        function renderNoteCategories(activeFilter = '') {
+            const container = document.getElementById('note-categories');
+            container.innerHTML = `<button type="button" data-filter="" class="note-category-btn ${activeFilter === '' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} font-semibold py-1 px-3 rounded-full text-xs transition-colors">Wszystkie</button>`;
+            const categories = [...new Set(noteDatabase.map(item => item.category))];
+            categories.forEach(category => {
+                const button = document.createElement('button');
+                button.type = 'button'; 
+                button.textContent = category;
+                button.dataset.filter = category;
+                button.className = 'note-category-btn text-xs font-semibold py-1 px-3 rounded-full transition-colors ' +
+                                    (category === activeFilter ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300');
+                container.appendChild(button);
+            });
+            document.querySelectorAll('.note-category-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const filter = this.dataset.filter;
+                    renderNoteCategories(filter);
+                    renderNoteList(filter);
+                });
+            });
+        }
+
+        function renderNoteList(filter = '') {
+            const listContainer = document.getElementById('note-list');
+            listContainer.innerHTML = '';
+            noteDatabase.forEach(categoryGroup => {
+                if (filter === '' || categoryGroup.category === filter) {
+                    categoryGroup.notes.forEach(noteText => {
+                        listContainer.appendChild(createNoteButton(noteText));
+                    });
+                }
+            });
+        }
+        
+        // --- MODAL AND FORM LOGIC ---
+        function openModal(modal) {
+            modal.classList.remove('invisible', 'opacity-0');
+            modal.classList.add('open', 'opacity-100');
+        }
+
+        function closeModal(modal) {
+            modal.classList.remove('open', 'opacity-100');
+            modal.classList.add('opacity-0');
+            setTimeout(() => modal.classList.add('invisible'), 300);
+        }
+
+        function generateUniqueId() {
+            return Date.now().toString(36) + Math.random().toString(36).substring(2);
+        }
+        
+        function openControlModal(id = null) {
+            currentControlId = id;
+            controlForm.reset();
+            document.getElementById('delete-control-btn').classList.add('hidden');
+            document.getElementById('generate-protocol-btn').classList.add('hidden');
+            document.getElementById('modal-title').textContent = 'Dodaj nową kontrolę';
+            renderParticipantsCheckboxes();
+            const dateInput = document.getElementById('control-date');
+            if (dateInput) dateInput.valueAsDate = new Date();
+            if (id !== null) {
+                const control = controls.find(c => c.id === id);
+                if (control) {
+                    document.getElementById('modal-title').textContent = 'Edytuj kontrolę';
+                    document.getElementById('control-street').value = control.street;
+                    document.getElementById('control-house-number').value = control.houseNumber;
+                    document.getElementById('control-city').value = control.city;
+                    document.getElementById('control-zip').value = control.zip;
+                    document.getElementById('control-type').value = control.type;
+                    document.getElementById('control-date').value = control.date;
+                    document.getElementById('control-plot-number').value = control.plotNumber || '';
+                    document.getElementById('control-geodetic-district').value = control.geodeticDistrict || '';
+                    renderParticipantsCheckboxes(control.participants || []);
+                    document.getElementById('delete-control-btn').classList.remove('hidden');
+                    document.getElementById('generate-protocol-btn').classList.remove('hidden');
+                }
+            }
+            openModal(controlModal);
+        }
+
+        function openProtocolModal(controlId) {
+            const control = controls.find(c => c.id === controlId);
+            if (!control) return;
+            currentControlId = controlId;
+            protocolForm.reset();
+            currentProtocol = control.protocol || {};
+            photos = currentProtocol.photos || [];
+            document.getElementById('protocol-date').value = currentProtocol.date || control.date;
+            document.getElementById('protocol-case').value = currentProtocol.case || `Kontrola w sprawie gospodarowania odpadami komunalnymi na nieruchomości ${getFullAddress(control)}.`;
+            document.getElementById('protocol-union-reps').value = (currentProtocol.unionReps || (control.participants || []).join('\n')).trim();
+            document.getElementById('protocol-admin-reps').value = currentProtocol.adminReps || '';
+            document.getElementById('protocol-parties').value = currentProtocol.parties || '';
+            document.getElementById('protocol-witnesses').value = currentProtocol.witnesses || '';
+            document.getElementById('protocol-findings').value = currentProtocol.findings || '';
+            const resizeCanvas = (pad, base64Data) => {
+                const canvas = pad.canvas;
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = canvas.offsetHeight * ratio;
+                canvas.getContext("2d").scale(ratio, ratio);
+                if (base64Data) pad.fromDataURL(base64Data);
+            };
+            unionSignaturePad.clear();
+            partiesSignaturePad.clear();
+            setTimeout(() => {
+                resizeCanvas(unionSignaturePad, currentProtocol.unionSignature);
+                resizeCanvas(partiesSignaturePad, currentProtocol.partiesSignature);
+            }, 300); 
+            renderPhotos();
+            renderNoteCategories();
+            renderNoteList();
+            openModal(protocolModal);
+        }
+
+        function openJointNoteModal() {
+            document.getElementById('joint-note-form').reset();
+            document.getElementById('joint-note-protocols-summary').classList.add('hidden');
+            document.getElementById('protocols-count').textContent = '';
+            document.getElementById('joint-note-participants-container').innerHTML = '';
+            document.getElementById('finalize-joint-note-btn').disabled = true;
+            const resizeCanvas = (pad, base64Data) => {
+                const canvas = pad.canvas;
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = canvas.offsetHeight * ratio;
+                canvas.getContext("2d").scale(ratio, ratio);
+                if (base64Data) pad.fromDataURL(base64Data);
+            };
+            jointNoteSignaturePad.clear();
+             setTimeout(() => {
+                resizeCanvas(jointNoteSignaturePad, null);
+            }, 300);
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('joint-note-date-filter').value = today;
+            openModal(jointNoteModal);
+        }
+
+        // --- ZAPIS DANYCH LOKALNYCH ---
+        async function saveControl() {
+            const isNew = !currentControlId;
+            const docId = currentControlId || generateUniqueId();
+            
+            const controlData = {
+                id: docId,
+                street: document.getElementById('control-street').value.trim(),
+                houseNumber: document.getElementById('control-house-number').value.trim(),
+                city: document.getElementById('control-city').value.trim(),
+                zip: document.getElementById('control-zip').value.trim(),
+                type: document.getElementById('control-type').value,
+                date: document.getElementById('control-date').value,
+                plotNumber: document.getElementById('control-plot-number').value.trim(),
+                geodeticDistrict: document.getElementById('control-geodetic-district').value.trim(),
+                participants: Array.from(document.querySelectorAll('#participants-container input:checked')).map(cb => cb.value),
+                protocol: null
+            };
+
+            if (isNew) {
+                controls.push(controlData);
+            } else {
+                const index = controls.findIndex(c => c.id === docId);
+                if (index !== -1) {
+                    controlData.protocol = controls[index].protocol || null;
+                    controls[index] = controlData;
+                }
+            }
+            saveLocalControls();
+            applyFilters();
+            showMessage(`Kontrola ${isNew ? 'dodana' : 'zaktualizowana'}!`, 'success');
+            closeModal(controlModal);
+        }
+
+        async function deleteControl() {
+            if (!currentControlId || !confirm('Czy na pewno chcesz usunąć tę kontrolę? Tej operacji nie można cofnąć.')) return;
+            controls = controls.filter(c => c.id !== currentControlId);
+            saveLocalControls();
+            applyFilters();
+            showMessage('Kontrola usunięta.', 'info');
+            closeModal(controlModal);
+        }
+
+        async function saveProtocol() {
+            const controlIndex = controls.findIndex(c => c.id === currentControlId);
+            if (controlIndex === -1) return;
+
+            const saveBtn = document.getElementById('save-protocol-btn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Zapisuję...';
+
+            const protocolData = {
+                date: document.getElementById('protocol-date').value,
+                case: document.getElementById('protocol-case').value.trim(),
+                unionReps: document.getElementById('protocol-union-reps').value.trim(),
+                adminReps: document.getElementById('protocol-admin-reps').value.trim(),
+                parties: document.getElementById('protocol-parties').value.trim(),
+                witnesses: document.getElementById('protocol-witnesses').value.trim(),
+                findings: document.getElementById('protocol-findings').value.trim(),
+                photos: photos,
+                unionSignature: unionSignaturePad.isEmpty() ? null : unionSignaturePad.toDataURL('image/png'),
+                partiesSignature: partiesSignaturePad.isEmpty() ? null : partiesSignaturePad.toDataURL('image/png'),
+            };
+
+            controls[controlIndex].protocol = protocolData;
+            saveLocalControls();
+            applyFilters();
+            showMessage('Protokół został zapisany!', 'success');
+            
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Zapisz protokół';
+        }
+
+        async function deleteProtocol() {
+            if (!currentControlId || !confirm('Czy na pewno chcesz usunąć ten protokół?')) return;
+            const controlIndex = controls.findIndex(c => c.id === currentControlId);
+            if(controlIndex !== -1) {
+                controls[controlIndex].protocol = null;
+                saveLocalControls();
+                applyFilters();
+                showMessage('Protokół został usunięty.', 'info');
+                closeModal(protocolModal);
+            }
+        }
+
+        function handlePhotoSelection(event) {
+            Array.from(event.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    photos.push({ id: Date.now().toString() + Math.random(), url: e.target.result });
+                    renderPhotos();
+                };
+                reader.readAsDataURL(file);
+            });
+            event.target.value = ''; 
+        }
+
+        function renderPhotos() {
+            const container = document.getElementById('photos-preview-container');
+            container.innerHTML = '';
+            photos.forEach(photo => {
+                const div = document.createElement('div');
+                div.className = 'relative w-24 h-24';
+                div.innerHTML = `
+                    <img src="${photo.url}" class="w-full h-full object-cover rounded shadow-md cursor-pointer">
+                    <button type="button" class="absolute top-0 right-0 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center p-0 leading-none -mt-1 -mr-1" onclick="deletePhoto('${photo.id}')">&times;</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function deletePhoto(id) {
+            photos = photos.filter(p => p.id !== id);
+            renderPhotos();
+        }
+        
+        function generateProtocolHTML(control, protocol) {
+            const unionReps = protocol.unionReps.replace(/\n/g, '<br>');
+            const adminReps = protocol.adminReps.replace(/\n/g, '<br>');
+            const parties = protocol.parties.replace(/\n/g, '<br>');
+            const witnesses = protocol.witnesses.replace(/\n/g, '<br>');
+            const findings = protocol.findings.replace(/\n/g, '<br>');
+            const signatureUnion = protocol.unionSignature ? `<img src="${protocol.unionSignature}" style="width: 150px; height: 60px; border: 1px solid #000; display: block; margin-top: 10px;">` : '';
+            const signatureParties = protocol.partiesSignature ? `<img src="${protocol.partiesSignature}" style="width: 150px; height: 60px; border: 1px solid #000; display: block; margin-top: 10px;">` : '';
+            let photosHtml = '';
+            if (protocol.photos && protocol.photos.length > 0) {
+                photosHtml = '<h3 style="margin-top: 20px;">Dokumentacja Fotograficzna</h3>';
+                photosHtml += '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+                protocol.photos.forEach((photo, index) => {
+                    photosHtml += `
+                        <div style="width: 320px; display: inline-block; margin-bottom: 10px;">
+                            <p style="font-size: 11px; font-weight: bold; margin-bottom: 5px;">Zdjęcie ${index + 1}</p>
+                            <img src="${photo.url}" style="width: 100%; height: auto; max-height: 250px; object-fit: cover; border: 1px solid #ccc;">
+                        </div>
+                    `;
+                });
+                photosHtml += '</div>';
+            }
+            return `
+                <div class="pdf-container" style="font-family: 'Inter', sans-serif;">
+                    <h1 style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px;">PROTOKÓŁ OGLĘDZIN</h1>
+                    <table style="width: 100%;">
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Adres Obiektu:</td><td>${getFullAddress(control)}</td></tr>
+                        ${control.plotNumber ? `<tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Numer Działki:</td><td>${control.plotNumber}</td></tr>` : ''}
+                        ${control.geodeticDistrict ? `<tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Obręb Ewidencyjny:</td><td>${control.geodeticDistrict}</td></tr>` : ''}
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Data Kontroli:</td><td>${formatDate(control.date)}</td></tr>
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Typ Kontroli:</td><td>${formatType(control.type)}</td></tr>
+                    </table>
+                    <h3 style="margin-top: 20px;">Sprawa</h3>
+                    <div style="padding: 10px; border: 1px solid #ccc;">${protocol.case}</div>
+                    <h3 style="margin-top: 20px;">Obecni przy Oględzinach</h3>
+                    <table style="width: 100%;">
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Przedstawiciele Związku:</td><td>${unionReps}</td></tr>
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Inni przedstawiciele adm.:</td><td>${adminReps}</td></tr>
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Strony i pełnomocnicy:</td><td>${parties}</td></tr>
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Świadkowie:</td><td>${witnesses}</td></tr>
+                    </table>
+                    <h3 style="margin-top: 20px;">Ustalono co następuje</h3>
+                    <div style="padding: 10px; border: 1px solid #ccc; min-height: 80px;">${findings}</div>
+                    <div style="margin-top: 30px; display: flex; justify-content: space-between;">
+                        <div style="width: 45%;">
+                            <p style="font-weight: bold; border-top: 1px solid #000; padding-top: 5px;">Podpis przedstawicieli Związku</p>
+                            ${signatureUnion}
+                        </div>
+                        <div style="width: 45%;">
+                            <p style="font-weight: bold; border-top: 1px solid #000; padding-top: 5px;">Podpis stron i osób obecnych</p>
+                            ${signatureParties}
+                        </div>
+                    </div>
+                    ${photosHtml}
+                </div>
+            `;
+        }
+
+        async function generateProtocolPDF() {
+            const control = controls.find(c => c.id === currentControlId);
+            if (!control || !control.protocol) {
+                showMessage('Brak zapisanego protokołu do wygenerowania!', 'error');
+                return;
+            }
+            document.getElementById('finalize-protocol-btn').disabled = true;
+            pdfRenderTemplate.innerHTML = generateProtocolHTML(control, control.protocol);
+            const contentToConvert = pdfRenderTemplate.querySelector('.pdf-container');
+            try {
+                const canvas = await html2canvas(contentToConvert, { scale: 2, useCORS: true, letterRendering: true });
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const imgWidth = 210;
+                const pageHeight = 295;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                const sanitizedAddress = `${control.city}_${control.street}_${control.houseNumber}`.replace(/[\s/\\?%*:|"<>]/g, '-');
+                const finalFileName = `Protokol_${getTimestampForFilename()}_${sanitizedAddress}.pdf`;
+
+                const blob = pdf.output('blob');
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = finalFileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showMessage('PDF wygenerowany pomyślnie!', 'success'); 
+            } catch (error) {
+                console.error("Błąd generowania PDF:", error);
+                showMessage(`Błąd generowania PDF: ${error.message}.`, 'error');
+            } finally {
+                pdfRenderTemplate.innerHTML = '';
+                document.getElementById('finalize-protocol-btn').disabled = false;
+            }
+        }
+
+        function filterJointNoteProtocols() {
+            const dateFilter = document.getElementById('joint-note-date-filter').value;
+            const summaryBox = document.getElementById('joint-note-protocols-summary');
+            const protocolsCountP = document.getElementById('protocols-count');
+            const participantsContainer = document.getElementById('joint-note-participants-container');
+            const finalizeBtn = document.getElementById('finalize-joint-note-btn');
+            participantsContainer.innerHTML = '';
+            finalizeBtn.disabled = true;
+            if (!dateFilter) {
+                summaryBox.classList.add('hidden');
+                showMessage('Wybierz datę, aby przefiltrować protokoły.', 'info');
+                return;
+            }
+            const filteredControls = controls.filter(c => c.date === dateFilter && c.protocol);
+            if (filteredControls.length === 0) {
+                protocolsCountP.textContent = `Nie znaleziono zapisanych protokołów z dnia ${formatDate(dateFilter)}.`;
+                summaryBox.classList.remove('hidden');
+                showMessage('Brak protokołów do połączenia.', 'error');
+                return;
+            }
+            const uniqueParticipants = new Set();
+            filteredControls.forEach(c => {
+                if (c.protocol && c.protocol.unionReps) {
+                    c.protocol.unionReps.split('\n').map(r => r.trim()).filter(r => r).forEach(r => uniqueParticipants.add(r));
+                }
+            });
+            const participantsList = Array.from(uniqueParticipants).sort();
+            protocolsCountP.textContent = `Znaleziono ${filteredControls.length} protokołów z dnia ${formatDate(dateFilter)} gotowych do połączenia:`;
+            summaryBox.classList.remove('hidden');
+            participantsList.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'text-sm text-gray-700 p-2 bg-white border border-gray-300 rounded';
+                div.textContent = p;
+                participantsContainer.appendChild(div);
+            });
+            finalizeBtn.disabled = false;
+        }
+        
+        function generateJointNoteHTML(date, city, subject, controls, signature) {
+            const today = new Date().toLocaleDateString('pl-PL');
+            const uniqueParticipants = new Set();
+            controls.forEach(c => {
+                if (c.protocol && c.protocol.unionReps) {
+                    c.protocol.unionReps.split('\n').map(r => r.trim()).filter(r => r).forEach(r => uniqueParticipants.add(r));
+                }
+            });
+            const participantsText = Array.from(uniqueParticipants).sort().join('<br>');
+            const signatureHtml = signature ? `<img src="${signature}" style="width: 200px; height: 100px; border: 1px solid #000; display: block; margin-top: 10px;">` : '';
+            let protocolsHtml = '';
+            controls.forEach((control, index) => {
+                const findings = control.protocol && control.protocol.findings 
+                    ? control.protocol.findings.replace(/\n/g, '<br>') 
+                    : 'Brak ustaleń.';
+                protocolsHtml += `
+                    <div style="margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px dashed #ccc;">
+                        <p style="font-size: 12px; font-weight: bold; margin-bottom: 4px;">${index + 1}. ${getFullAddress(control)}</p>
+                        <div style="font-size: 11px; margin-left: 15px; padding: 5px; background-color: #f9f9f9; border-left: 3px solid #eee;">
+                            <strong>Ustalono:</strong><br>${findings}
+                        </div>
+                    </div>
+                `;
+            });
+            return `
+                <div class="pdf-container" style="font-family: 'Inter', sans-serif;">
+                    <h1 style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px;">NOTATKA SŁUŻBOWA</h1>
+                    <p><strong>Sporządzono w:</strong> ${city}, dnia ${today}.</p>
+                    <p><strong>Dotyczy:</strong> Kontroli w terenie przeprowadzonych w dniu ${formatDate(date)}.</p>
+                    <h3 style="font-size: 14px; margin-top: 15px;">Autorzy notatki (uczestnicy kontroli):</h3>
+                    <div style="padding: 10px; border: 1px solid #ccc;">${participantsText}</div>
+                    <h3 style="font-size: 14px; margin-top: 15px;">Uwagi:</h3>
+                    <div style="padding: 10px; border: 1px solid #ccc;">${subject.replace(/\n/g, '<br>')}</div>
+                    <h3 style="font-size: 14px; margin-top: 15px;">Sporządzone Protokoły Oględzin:</h3>
+                    <div style="padding: 10px; border: 1px solid #ccc;">${protocolsHtml}</div>
+                    <div style="margin-top: 30px;">
+                        <p style="font-weight: bold; border-top: 1px solid #000; padding-top: 5px;">Podpis autora/autorów</p>
+                        ${signatureHtml}
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function generateJointNotePDF() {
+            const dateFilter = document.getElementById('joint-note-date-filter').value;
+            const city = document.getElementById('joint-note-city').value.trim();
+            const subject = document.getElementById('joint-note-subject').value.trim();
+            const signatureBase64 = jointNoteSignaturePad.isEmpty() ? null : jointNoteSignaturePad.toDataURL('image/png');
+            if (!dateFilter || !city) {
+                showMessage('Uzupełnij wymagane pola notatki (data, miejscowość).', 'error');
+                return;
+            }
+            const filteredControls = controls.filter(c => c.date === dateFilter && c.protocol);
+            if (filteredControls.length === 0) {
+                showMessage('Brak protokołów do wygenerowania notatki.', 'error');
+                return;
+            }
+            const finalizeBtn = document.getElementById('finalize-joint-note-btn');
+            finalizeBtn.disabled = true;
+            finalizeBtn.textContent = 'Generowanie...';
+            pdfRenderTemplate.innerHTML = generateJointNoteHTML(dateFilter, city, subject, filteredControls, signatureBase64);
+            const contentToConvert = pdfRenderTemplate.querySelector('.pdf-container');
+            try {
+                const canvas = await html2canvas(contentToConvert, { scale: 2, useCORS: true });
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const imgWidth = 210;
+                const pageHeight = 295;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                const finalFileName = `Notatka_Sluzbowa_${getTimestampForFilename()}.pdf`;
+                const blob = pdf.output('blob');
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = finalFileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showMessage('Notatka Służbowa PDF wygenerowana pomyślnie!', 'success');
+                closeModal(jointNoteModal);
+            } catch (error) {
+                console.error("Błąd generowania Notatki Służbowej PDF:", error);
+                showMessage(`Błąd generowania PDF Notatki Służbowej: ${error.message}.`, 'error');
+            } finally {
+                pdfRenderTemplate.innerHTML = '';
+                finalizeBtn.disabled = false;
+                finalizeBtn.textContent = 'Generuj i pobierz Notatkę (PDF)';
+            }
+        }
+        
+        // --- IDENTIFICATION MODULE ---
+        let currentIdentificationData = {};
+
+        function initIdentificationMap() {
+            if (identificationMap) {
+                identificationMap.remove();
+            }
+            identificationMap = L.map('identification-map').setView([54.03, 21.75], 13);
+            
+            const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri'
+            });
+
+            const parcelsLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', {
+                layers: 'dzialki,numery_dzialek',
+                format: 'image/png',
+                transparent: true,
+                attribution: 'GUGiK'
+            });
+            
+            satelliteLayer.addTo(identificationMap);
+            parcelsLayer.addTo(identificationMap);
+
+            L.control.layers({ "Satelita": satelliteLayer }, { "Działki ewidencyjne": parcelsLayer }).addTo(identificationMap);
+
+            identificationMap.locate({
+                setView: true,
+                maxZoom: 17,
+                watch: false,
+                timeout: 10000,
+                maximumAge: 5000,
+                enableHighAccuracy: true
+            });
+
+            identificationMap.on('locationfound', function(e) {
+                if (window.accuracyCircle) {
+                    window.accuracyCircle.remove();
+                }
+                window.accuracyCircle = L.circle(e.latlng, {
+                    radius: e.accuracy / 2,
+                    color: '#3b82f6',
+                    fillColor: '#60a5fa',
+                    fillOpacity: 0.3
+                }).addTo(identificationMap);
+            });
+            identificationMap.on('locationerror', function(e) {
+                let message = 'Wystąpił nieznany błąd lokalizacji.';
+                switch (e.code) {
+                    case 1:
+                        message = 'Odmówiono dostępu do lokalizacji. Sprawdź uprawnienia w ustawieniach przeglądarki.';
+                        break;
+                    case 2:
+                        message = 'Lokalizacja chwilowo niedostępna. Spróbuj ponownie na zewnątrz.';
+                        break;
+                    case 3:
+                        message = 'Pobieranie lokalizacji trwa zbyt długo (timeout). Spróbuj ponownie.';
+                        break;
+                }
+                showMessage(message, 'error');
+            });
+        }
+
+        function openIdentificationModal(id = null) {
+            currentIdentificationId = id;
+            const form = document.getElementById('identification-form');
+            const mapStep = document.getElementById('identification-map-step');
+            const previewStep = document.getElementById('identification-preview-step');
+            const saveBtn = document.getElementById('save-identification-btn');
+            const deleteBtn = document.getElementById('delete-identification-btn');
+            const generatePdfBtn = document.getElementById('generate-identification-pdf-btn');
+            form.reset();
+            currentIdentificationData = {};
+            document.getElementById('address-status').textContent = '';
+
+            generatePdfBtn.classList.add('hidden');
+            deleteBtn.classList.add('hidden');
+            saveBtn.classList.add('hidden');
+
+            if (id) {
+                const item = identifications.find(i => i.id === id);
+                if (!item) return;
+
+                currentIdentificationData = { latitude: item.latitude, longitude: item.longitude, fullAddress: item.fullAddress };
+
+                mapStep.classList.add('hidden');
+                previewStep.classList.remove('hidden');
+
+                document.getElementById('identification-modal-title').textContent = 'Podgląd Identyfikacji';
+                document.getElementById('identification-photo-preview').src = item.photo;
+                document.getElementById('gps-coords').textContent = `${item.latitude}, ${item.longitude}`;
+                
+                document.getElementById('open-map-link').href = `https://www.openstreetmap.org/#map=18/${item.latitude}/${item.longitude}`;
+                document.getElementById('geoportal-link').href = `https://mapy.geoportal.gov.pl/?identify=true&center=${item.longitude},${item.latitude}&zoom=18`;
+                
+                document.getElementById('identification-notes').value = item.notes;
+                document.getElementById('identification-plot-number').value = item.plotNumber || '';
+
+                saveBtn.classList.remove('hidden');
+                saveBtn.textContent = 'Zaktualizuj';
+                deleteBtn.classList.remove('hidden');
+                generatePdfBtn.classList.remove('hidden');
+            } else {
+                mapStep.classList.remove('hidden');
+                previewStep.classList.add('hidden');
+                document.getElementById('identification-modal-title').textContent = 'Nowa Identyfikacja Terenowa';
+                
+                setTimeout(() => {
+                    initIdentificationMap();
+                }, 100);
+            }
+            openModal(identificationModal);
+        }
+
+        function handleIdentificationCapture() {
+            const center = identificationMap.getCenter();
+            currentIdentificationData.latitude = center.lat.toFixed(6);
+            currentIdentificationData.longitude = center.lng.toFixed(6);
+
+            const captureBtn = document.getElementById('capture-btn');
+            captureBtn.disabled = true;
+            captureBtn.textContent = 'Otwieranie aparatu...';
+
+            document.getElementById('identification-photo-input').click();
+        }
+
+        function handleIdentificationPhoto(event) {
+            const file = event.target.files[0];
+            const captureBtn = document.getElementById('capture-btn');
+            captureBtn.disabled = false;
+            captureBtn.textContent = 'Zatwierdź lokalizację i zrób zdjęcie';
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                currentIdentificationData.photo = e.target.result;
+                displayIdentificationPreview();
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        function displayIdentificationPreview() {
+            document.getElementById('identification-map-step').classList.add('hidden');
+            document.getElementById('identification-preview-step').classList.remove('hidden');
+            document.getElementById('save-identification-btn').classList.remove('hidden');
+            document.getElementById('save-identification-btn').textContent = 'Zapisz';
+            
+            const lat = currentIdentificationData.latitude;
+            const lon = currentIdentificationData.longitude;
+
+            document.getElementById('identification-photo-preview').src = currentIdentificationData.photo;
+            document.getElementById('gps-coords').textContent = `${lat}, ${lon}`;
+            document.getElementById('geoportal-link').href = `https://mapy.geoportal.gov.pl/?identify=true&center=${lon},${lat}&zoom=18`;
+            document.getElementById('open-map-link').href = `https://www.openstreetmap.org/#map=18/${lat}/${lon}`;
+        }
+
+        function saveIdentification() {
+            const notes = document.getElementById('identification-notes').value.trim();
+            const plotNumber = document.getElementById('identification-plot-number').value.trim();
+            const isNew = !currentIdentificationId;
+            
+            if (isNew) {
+                 if (!currentIdentificationData.latitude || !currentIdentificationData.photo) {
+                    showMessage('Brak danych lokalizacji lub zdjęcia. Spróbuj ponownie.', 'error');
+                    return;
+                }
+                const newId = generateUniqueId();
+                identifications.push({
+                    id: newId,
+                    timestamp: new Date().toISOString(),
+                    latitude: currentIdentificationData.latitude,
+                    longitude: currentIdentificationData.longitude,
+                    photo: currentIdentificationData.photo,
+                    notes: notes,
+                    plotNumber: plotNumber,
+                    fullAddress: currentIdentificationData.fullAddress || ''
+                });
+            } else {
+                const index = identifications.findIndex(i => i.id === currentIdentificationId);
+                if (index !== -1) {
+                    identifications[index].notes = notes;
+                    identifications[index].plotNumber = plotNumber;
+                    identifications[index].fullAddress = currentIdentificationData.fullAddress || identifications[index].fullAddress || '';
+                }
+            }
+            saveLocalIdentifications();
+            renderIdentifications();
+            showMessage(`Identyfikacja ${isNew ? 'zapisana' : 'zaktualizowana'}!`, 'success');
+            closeModal(identificationModal);
+        }
+
+        function deleteIdentification() {
+            if (!currentIdentificationId || !confirm('Czy na pewno chcesz usunąć tę identyfikację?')) return;
+
+            identifications = identifications.filter(i => i.id !== currentIdentificationId);
+            saveLocalIdentifications();
+            renderIdentifications();
+            showMessage('Identyfikacja usunięta.', 'info');
+            closeModal(identificationModal);
+        }
+
+        // --- GUGiK & Google Maps API Functions ---
+
+        async function getParcelDataByXY(lon, lat) {
+            const url = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${lon},${lat}&result=teryt,voivodeship,county,commune,town,street,street_type,house_number,geom_wkt,parcel&srid=4326`;
+            try {
+                const text = await fetch(url).then(res => {
+                    if (!res.ok) throw new Error(`HTTP status ${res.status}`);
+                    return res.text();
+                });
+
+                const lines = text.trim().split('\n');
+                if (lines.length < 2 || lines[1].trim() === '-1') {
+                    return { error: true, message: 'Nie znaleziono działki.' };
+                }
+
+                const headers = lines[0].split(',');
+                const values = lines[1].split(',');
+                const result = {};
+                headers.forEach((header, i) => { result[header.trim()] = values[i] ? values[i].trim() : ''; });
+                
+                return {
+                    error: false,
+                    town: result.town || '',
+                    street: result.street || '',
+                    houseNumber: result.house_number || '',
+                    parcelId: result.parcel || '',
+                };
+            } catch (error) {
+                console.error("Błąd w getParcelDataByXY:", error);
+                return { error: true, message: 'Błąd połączenia z GUGiK.' };
+            }
+        }
+
+        async function getAddressFromGoogle(lat, lon) {
+            // ▼▼▼ WKLEJ SWÓJ NOWY, ZABEZPIECZONY KLUCZ API TUTAJ ▼▼▼
+            const apiKey = 'TWOJ_KLUCZ_API_GOOGLE_MAPS'; 
+            
+            if (apiKey === 'TWOJ_KLUCZ_API_GOOGLE_MAPS' || !apiKey) {
+                console.warn("Brak klucza API Google Maps. Funkcja geokodowania nie zostanie wykonana.");
+                return { error: true, message: 'Brak klucza API.' };
+            }
+            
+            const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${apiKey}&language=pl`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.status === 'OK' && data.results[0]) {
+                    return { 
+                        error: false, 
+                        address: data.results[0].formatted_address 
+                    };
+                } else {
+                    return { error: true, message: data.status };
+                }
+            } catch (error) {
+                console.error("Błąd podczas zapytania do Google Maps API:", error);
+                return { error: true, message: 'Błąd połączenia z Google.' };
+            }
+        }
+
+        async function fetchAndDisplayAddressData() {
+            const statusP = document.getElementById('address-status');
+            const plotInput = document.getElementById('identification-plot-number');
+            const fetchBtn = document.getElementById('fetch-address-btn');
+            
+            if (!currentIdentificationData.latitude || !currentIdentificationData.longitude) {
+                statusP.textContent = 'Brak zapisanych współrzędnych.';
+                return;
+            }
+
+            statusP.textContent = 'Pobieram dane (GUGiK & Google)...';
+            statusP.style.color = '#6b7280';
+            fetchBtn.disabled = true;
+
+            try {
+                const [gugikResult, googleResult] = await Promise.all([
+                    getParcelDataByXY(currentIdentificationData.longitude, currentIdentificationData.latitude),
+                    getAddressFromGoogle(currentIdentificationData.latitude, currentIdentificationData.longitude)
+                ]);
+
+                let finalAddress = '';
+                let finalPlotNumber = '';
+                let statusHtml = '';
+
+                if (!googleResult.error && googleResult.address) {
+                    finalAddress = googleResult.address;
+                }
+
+                if (!gugikResult.error && gugikResult.parcelId) {
+                    finalPlotNumber = gugikResult.parcelId;
+                    plotInput.value = finalPlotNumber;
+                }
+                
+                currentIdentificationData.fullAddress = finalAddress; 
+
+                if (finalAddress) {
+                    statusHtml = `✅ Adres (Google): <strong>${finalAddress}</strong>`;
+                    if (finalPlotNumber) {
+                        statusHtml += `<br>✅ Działka (GUGiK): <strong>${finalPlotNumber}</strong>`;
+                    }
+                    statusP.style.color = '#22c55e';
+                } else if (finalPlotNumber) {
+                    statusHtml = `⚠️ Działka (GUGiK): <strong>${finalPlotNumber}</strong> (Brak adresu z Google)`;
+                    statusP.style.color = '#f97316';
+                } else {
+                    statusHtml = '❌ Nie udało się znaleźć żadnych danych adresowych.';
+                    statusP.style.color = '#ef4444';
+                }
+                statusP.innerHTML = statusHtml;
+
+            } catch (error) {
+                console.error("Błąd podczas pobierania danych adresowych:", error);
+                statusP.textContent = '❌ Wystąpił błąd sieciowy.';
+                statusP.style.color = '#ef4444';
+            } finally {
+                fetchBtn.disabled = false;
+            }
+        }
+
+        // --- PDF Generation and other functions ---
+
+        function getMapImageAsDataUrl(latitude, longitude) {
+            return new Promise((resolve) => {
+                const bboxDelta = 0.001; 
+                const west = parseFloat(longitude) - bboxDelta;
+                const south = parseFloat(latitude) - (bboxDelta * 0.75);
+                const east = parseFloat(longitude) + bboxDelta;
+                const north = parseFloat(latitude) + (bboxDelta * 0.75);
+
+                const mapUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${west},${south},${east},${north}&bboxSR=4326&size=800,600&imageSR=4326&format=jpg&transparent=false&f=image`;
+                const unavailableMapPlaceholder = 'https://placehold.co/800x600/f3f4f6/9ca3af?text=Mapa+niedostępna+(brak+internetu)';
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 800;
+                canvas.height = 600;
+
+                const mapImg = new Image();
+                mapImg.crossOrigin = 'Anonymous';
+                mapImg.onload = () => {
+                    ctx.drawImage(mapImg, 0, 0);
+
+                    const markerImg = new Image();
+                    markerImg.crossOrigin = 'Anonymous';
+                    markerImg.onload = () => {
+                        const markerWidth = 25;
+                        const markerHeight = 41;
+                        ctx.drawImage(markerImg, (canvas.width - markerWidth) / 2, (canvas.height / 2) - markerHeight, markerWidth, markerHeight);
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    };
+                    markerImg.onerror = () => {
+                        console.error("Nie udało się załadować ikony pinezki.");
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    };
+                    markerImg.src = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png';
+                };
+                mapImg.onerror = () => {
+                    console.error("Nie udało się załadować mapy satelitarnej.");
+                    resolve(unavailableMapPlaceholder);
+                };
+                mapImg.src = mapUrl;
+            });
+        }
+
+        async function generateIdentificationHTML(item) {
+            const mapImageDataUrl = await getMapImageAsDataUrl(item.latitude, item.longitude);
+            
+            let addressHtml = `<tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Adres Nieruchomości:</td><td>${item.fullAddress || 'Brak zapisanych danych adresowych.'}</td></tr>`;
+
+            return `
+                <div class="pdf-container" style="font-family: 'Inter', sans-serif;">
+                    <h1 style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px;">RAPORT Z IDENTYFIKACJI TERENOWEJ</h1>
+                    <table style="width: 100%;">
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Data i Godzina:</td><td>${formatDate(item.timestamp)}</td></tr>
+                        <tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Współrzędne GPS:</td><td>${item.latitude}, ${item.longitude}</td></tr>
+                        ${item.plotNumber ? `<tr><td style="width: 30%; font-weight: bold; background-color: #f0f0f0;">Numer Działki (wpisany):</td><td>${item.plotNumber}</td></tr>` : ''}
+                        ${addressHtml}
+                    </table>
+
+                    <h3 style="margin-top: 20px;">Dokumentacja Fotograficzna</h3>
+                    <img src="${item.photo}" style="width: 100%; max-width: 650px; height: auto; border: 1px solid #ccc; margin-top: 10px;">
+
+                    <h3 style="margin-top: 20px;">Lokalizacja na Mapie</h3>
+                    <img src="${mapImageDataUrl}" style="width: 100%; max-width: 650px; height: auto; border: 1px solid #ccc; margin-top: 10px;">
+
+                    <h3 style="margin-top: 20px;">Notatki</h3>
+                    <div style="padding: 10px; border: 1px solid #ccc; min-height: 80px;">${(item.notes || 'Brak notatek.').replace(/\n/g, '<br>')}</div>
+                </div>
+            `;
+        }
+
+        async function generateIdentificationPDF() {
+            const item = identifications.find(i => i.id === currentIdentificationId);
+            if (!item) {
+                showMessage('Nie znaleziono danych identyfikacji.', 'error');
+                return;
+            }
+
+            const generateBtn = document.getElementById('generate-identification-pdf-btn');
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generowanie...';
+
+            try {
+                const htmlContent = await generateIdentificationHTML(item);
+                pdfRenderTemplate.innerHTML = htmlContent;
+                const contentToConvert = pdfRenderTemplate.querySelector('.pdf-container');
+                
+                const canvas = await html2canvas(contentToConvert, { scale: 2, useCORS: true, letterRendering: true });
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const imgWidth = 210;
+                const pageHeight = 295;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+                pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                const sanitizedPlot = (item.plotNumber || 'bez_nr').replace(/[\s/\\?%*:|"<>]/g, '-');
+                const finalFileName = `Identyfikacja_${getTimestampForFilename()}_${sanitizedPlot}.pdf`;
+                
+                const blob = pdf.output('blob');
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = finalFileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showMessage('Raport PDF wygenerowany pomyślnie!', 'success');
+            } catch (error) {
+                console.error("Błąd generowania raportu PDF:", error);
+                showMessage(`Błąd generowania PDF: ${error.message}.`, 'error');
+            } finally {
+                pdfRenderTemplate.innerHTML = '';
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generuj Raport PDF';
+            }
+        }
+
+
+        // --- DATA EXPORT/IMPORT ---
+        function exportData() {
+            const dataToExport = {
+                controls: controls,
+                identifications: identifications
+            };
+            const dataStr = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kopia_zapasowa_${getTimestampForFilename()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showMessage('Kopia zapasowa została pomyślnie wyeksportowana.', 'success');
+        }
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (!importedData.controls || !importedData.identifications) {
+                        throw new Error("Nieprawidłowy format pliku kopii zapasowej.");
+                    }
+
+                    if (confirm("Czy na pewno chcesz nadpisać wszystkie obecne dane danymi z pliku? Tej operacji nie można cofnąć.")) {
+                        controls = importedData.controls;
+                        identifications = importedData.identifications;
+                        saveLocalControls();
+                        saveLocalIdentifications();
+                        applyFilters();
+                        renderIdentifications();
+                        showMessage("Dane zostały pomyślnie zaimportowane!", "success");
+                    }
+                } catch (error) {
+                    showMessage(`Błąd importu: ${error.message}`, "error");
+                } finally {
+                    event.target.value = null;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function applyFilters() {
+            const filterAddressInput = document.getElementById('filter-address');
+            const filterTypeSelect = document.getElementById('filter-type');
+            const query = filterAddressInput.value.toLowerCase();
+            const type = filterTypeSelect.value;
+            let filtered = controls.filter(control => 
+                `${control.street} ${control.houseNumber}, ${control.city}`.toLowerCase().includes(query)
+            );
+            if (type) {
+                filtered = filtered.filter(control => control.type === type);
+            }
+            renderControls(filtered);
+        }
+
+        // --- LISTENERS I INICJALIZACJA ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDatalists();
+            const setupSignaturePad = (id) => {
+                const canvas = document.getElementById(id);
+                if (!canvas) return;
+                const pad = new SignaturePad(canvas);
+                const resizeCanvas = () => {
+                    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                    canvas.width = canvas.offsetWidth * ratio;
+                    canvas.height = canvas.offsetHeight * ratio;
+                    canvas.getContext("2d").scale(ratio, ratio);
+                    pad.clear();
+                };
+                window.addEventListener('resize', resizeCanvas);
+                resizeCanvas();
+                return pad;
+            };
+            unionSignaturePad = setupSignaturePad('union-signature-pad');
+            partiesSignaturePad = setupSignaturePad('parties-signature-pad');
+            jointNoteSignaturePad = setupSignaturePad('joint-note-signature-pad');
+
+            document.getElementById('control-city').addEventListener('change', function() {
+                const city = this.value;
+                const zipInput = document.getElementById('control-zip');
+                if (zipCodesByCity[city]) {
+                    zipInput.value = zipCodesByCity[city];
+                }
+            });
+
+            // Tab Navigation
+            const tabControls = document.getElementById('tab-controls');
+            const tabIdentifications = document.getElementById('tab-identifications');
+            
+            tabControls.addEventListener('click', () => {
+                controlsContentView.classList.remove('hidden');
+                identificationsContentView.classList.add('hidden');
+                tabControls.classList.add('active');
+                tabIdentifications.classList.remove('active');
+                applyFilters();
+            });
+
+            tabIdentifications.addEventListener('click', () => {
+                controlsContentView.classList.add('hidden');
+                identificationsContentView.classList.remove('hidden');
+                tabControls.classList.remove('active');
+                tabIdentifications.classList.add('active');
+                renderIdentifications();
+            });
+
+            // Data Management
+            document.getElementById('export-data-btn').addEventListener('click', exportData);
+            document.getElementById('import-data-btn').addEventListener('click', () => {
+                document.getElementById('import-file-input').click();
+            });
+            document.getElementById('import-file-input').addEventListener('change', handleImport);
+
+            // Modal Control
+            document.getElementById('add-control-btn').addEventListener('click', () => openControlModal());
+            document.getElementById('close-modal-btn').addEventListener('click', () => closeModal(controlModal));
+            controlForm.addEventListener('submit', (e) => { e.preventDefault(); saveControl(); });
+            document.getElementById('delete-control-btn').addEventListener('click', deleteControl);
+            document.getElementById('generate-protocol-btn').addEventListener('click', () => openProtocolModal(currentControlId));
+
+            // Modal Protokół
+            document.getElementById('close-protocol-modal-btn').addEventListener('click', () => closeModal(protocolModal));
+            document.getElementById('save-protocol-btn').addEventListener('click', saveProtocol);
+            document.getElementById('delete-protocol-btn').addEventListener('click', deleteProtocol);
+            document.getElementById('finalize-protocol-btn').addEventListener('click', generateProtocolPDF);
+            document.getElementById('protocol-photos-input').addEventListener('change', handlePhotoSelection);
+            
+            document.getElementById('clear-union-signature').addEventListener('click', () => unionSignaturePad.clear());
+            document.getElementById('clear-parties-signature').addEventListener('click', () => partiesSignaturePad.clear());
+            
+            // Modal Notatka Służbowa
+            document.getElementById('add-joint-note-btn').addEventListener('click', openJointNoteModal);
+            document.getElementById('close-joint-note-modal-btn').addEventListener('click', () => closeModal(jointNoteModal));
+            document.getElementById('filter-joint-note-btn').addEventListener('click', filterJointNoteProtocols);
+            document.getElementById('finalize-joint-note-btn').addEventListener('click', generateJointNotePDF);
+            document.getElementById('clear-joint-note-signature').addEventListener('click', () => jointNoteSignaturePad.clear());
+
+            // Identification Module Listeners
+            document.getElementById('add-identification-btn').addEventListener('click', () => openIdentificationModal());
+            document.getElementById('close-identification-modal-btn').addEventListener('click', () => closeModal(identificationModal));
+            document.getElementById('capture-btn').addEventListener('click', handleIdentificationCapture);
+            document.getElementById('identification-photo-input').addEventListener('change', handleIdentificationPhoto);
+            document.getElementById('save-identification-btn').addEventListener('click', saveIdentification);
+            document.getElementById('delete-identification-btn').addEventListener('click', deleteIdentification);
+            document.getElementById('generate-identification-pdf-btn').addEventListener('click', generateIdentificationPDF);
+            document.getElementById('fetch-address-btn').addEventListener('click', fetchAndDisplayAddressData);
+
+            document.querySelectorAll('.back-to-panel-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const modal = e.target.closest('.modal');
+                    if (modal) closeModal(modal);
+                });
+            });
+            
+            // Filtrowanie
+            document.getElementById('filter-address').addEventListener('input', applyFilters);
+            document.getElementById('filter-type').addEventListener('change', applyFilters);
+
+            // Wyczyść dane lokalne
+            document.getElementById('clear-controls-btn').addEventListener('click', () => {
+                if(confirm('Czy na pewno chcesz usunąć WSZYSTKIE kontrole z pamięci tego urządzenia?')) {
+                    controls = [];
+                    saveLocalControls();
+                    applyFilters();
+                    showMessage('Wszystkie kontrole zostały usunięte.', 'info');
+                }
+            });
+             document.getElementById('clear-identifications-btn').addEventListener('click', () => {
+                if(confirm('Czy na pewno chcesz usunąć WSZYSTKIE identyfikacje z pamięci tego urządzenia?')) {
+                    identifications = [];
+                    saveLocalIdentifications();
+                    renderIdentifications();
+                    showMessage('Wszystkie identyfikacje zostały usunięte.', 'info');
+                }
+            });
+            
+            // Zarejestruj Service Worker
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js') 
+                        .then(registration => console.log('Service Worker zarejestrowany:', registration))
+                        .catch(error => console.log('Rejestracja Service Workera nie powiodła się:', error));
+                });
+            }
+        });
+    </script>
+</body>
+</html>
