@@ -1,0 +1,10 @@
+{
+  "name": "Panel Zarządzania Kontrolami",
+  "short_name": "Kontrole",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "description": "Aplikacja do zarządzania kontrolami w terenie.",
+  "icons": []
+}
