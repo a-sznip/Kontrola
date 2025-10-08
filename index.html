@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Kontroli</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f3f4f6; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="p-4">
+
+    <div id="auth-view" class="flex flex-col items-center justify-center min-h-[calc(100vh-2rem)]">
+        <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm text-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Logowanie</h2>
+            <form id="login-form" class="space-y-4">
+                <input type="email" id="login-email" placeholder="E-mail" required class="w-full p-3 border rounded-lg">
+                <input type="password" id="login-password" placeholder="Hasło" required class="w-full p-3 border rounded-lg">
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg">Zaloguj</button>
+            </form>
+            <p id="auth-error-message" class="text-red-500 text-sm mt-4 h-4"></p>
+        </div>
+    </div>
+    
+    <div id="app-view" class="hidden">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Panel Kontroli</h1>
+            <button id="logout-btn" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg text-sm">Wyloguj</button>
+        </div>
+        <div class="bg-white rounded-xl shadow-lg p-6 max-w-4xl mx-auto">
+            <p class="text-sm text-gray-600">Zalogowany jako: <span id="user-email" class="font-medium"></span></p>
+        </div>
+    </div>
+
+    <script>
+        const App = {
+            config: {
+                firebase: {
+                    apiKey: "AIzaSyDFCV_dXKnqOn8yYbCSWSayOijB90MABv4",
+                    authDomain: "kontrole-mzmgo.firebaseapp.com",
+                    projectId: "kontrole-mzmgo",
+                }
+            },
+            state: { firebaseApp: null, auth: null },
+            elements: {},
+
+            init() {
+                try {
+                    this.state.firebaseApp = firebase.initializeApp(this.config.firebase);
+                    this.state.auth = firebase.auth();
+                } catch (error) {
+                    console.error("Błąd inicjalizacji Firebase:", error);
+                    return;
+                }
+                
+                this.cacheDOMElements();
+                this.bindEvents();
+
+                this.state.auth.onAuthStateChanged(user => {
+                    if (user) {
+                        this.elements.authView.classList.add('hidden');
+                        this.elements.appView.classList.remove('hidden');
+                        this.elements.userEmail.textContent = user.email;
+                    } else {
+                        this.elements.authView.classList.remove('hidden');
+                        this.elements.appView.classList.add('hidden');
+                    }
+                });
+            },
+            
+            cacheDOMElements() {
+                const ids = ['authView', 'appView', 'loginForm', 'loginEmail', 'loginPassword', 'authErrorMessage', 'logoutBtn', 'userEmail'];
+                ids.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) console.error(`Nie znaleziono elementu o ID: '${id}'`);
+                    this.elements[id.replace(/-[a-z]/g, g => g[1].toUpperCase())] = el;
+                });
+            },
+
+            bindEvents() {
+                this.elements.loginForm.addEventListener('submit', this.handleLogin.bind(this));
+                this.elements.logoutBtn.addEventListener('click', this.handleLogout.bind(this));
+            },
+
+            handleLogin(e) {
+                e.preventDefault();
+                this.elements.authErrorMessage.textContent = "";
+                const email = this.elements.loginEmail.value;
+                const password = this.elements.loginPassword.value;
+                this.state.auth.signInWithEmailAndPassword(email, password)
+                    .catch(error => {
+                        this.elements.authErrorMessage.textContent = "Błędny e-mail lub hasło.";
+                    });
+            },
+
+            handleLogout() { 
+                this.state.auth.signOut();
+            }
+        };
+
+        // --- OSTATECZNA POPRAWKA ---
+        // Czekamy na załadowanie DOM, a potem dajemy przeglądarce dodatkowe 100ms
+        // na "odetchnięcie", zanim uruchomimy skrypt.
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                App.init();
+            }, 100); 
+        });
+    </script>
+</body>
+</html>
