@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f3f4f6;
+    min-height: 100vh;
+}
+.modal {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.modal-content {
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.modal.open .modal-content {
+    transform: translateY(0);
+}
+.participant-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid #d1d5db;
+    border-radius: 0.25rem;
+    position: relative;
+    cursor: pointer;
+    outline: none;
+}
+.participant-checkbox:checked {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
+.participant-checkbox:checked::before {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 0.875rem;
+}
+.signature-pad {
+    border: 2px solid #3b82f6;
+    background-color: #fff;
+    cursor: crosshair;
+    touch-action: none;
+    height: 12rem;
+}
+.pdf-container {
+    width: 700px;
+    padding: 15px;
+    background-color: white;
+    font-size: 11px;
+}
+.pdf-container table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+}
+.pdf-container th, .pdf-container td {
+    border: 1px solid #ccc;
+    padding: 6px;
+    text-align: left;
+    font-size: 11px;
+}
+.pdf-container h3 {
+    font-size: 14px;
+    font-weight: bold;
+    border-bottom: 1px solid #ccc;
+    margin-top: 10px;
+    padding-bottom: 4px;
+}
+.pdf-container p {
+    margin-bottom: 6px;
+}
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+.tab-button.active {
+    border-color: #2563eb;
+    color: #2563eb;
+    background-color: #eff6ff;
+}
+#identification-map { height: 400px; }
+.leaflet-crosshair { cursor: crosshair; }
+.center-marker {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 25px;
+    height: 41px;
+    margin-left: -12.5px;
+    margin-top: -41px;
+    pointer-events: none;
+    background-image: url('https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    z-index: 1000;
+}
+.progress-bar {
+    background-color: #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+.progress-bar-inner {
+    background-color: #3b82f6;
+    height: 1.5rem;
+    text-align: center;
+    color: white;
+    line-height: 1.5rem;
+    transition: width 0.3s ease;
+}
