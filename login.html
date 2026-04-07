@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logowanie - Eco System (Auto-Update)</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#121212">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+
+    <style>
+        body { background: #121212; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: #1e1e1e; padding: 40px; border-radius: 12px; border: 1px solid #333; width: 300px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; background: #2c2c2c; border: 1px solid #444; color: #fff; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #2ecc71; border: none; color: #000; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 16px; transition: background 0.3s; }
+        button:hover { background: #27ae60; }
+        
+        .btn-offline { background: #34495e; color: #fff; margin-top: 10px; border: 1px solid #2c3e50; }
+        .btn-offline:hover { background: #2c3e50; }
+
+        .error { color: #e74c3c; margin-top: 15px; font-size: 14px; display: none; }
+        
+        /* BANER AKTUALIZACJI PWA */
+        #updateBanner {
+            display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #2ecc71; color: #000; padding: 15px 30px; border-radius: 8px;
+            text-align: center; font-size: 15px; font-weight: bold; z-index: 9999;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 2px solid #000;
+        }
+        #updateBanner button {
+            background: #000; color: #2ecc71; border: none; padding: 8px 20px;
+            margin-left: 15px; border-radius: 6px; font-weight: 900; cursor: pointer; text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="updateBanner">
+        Dostępna nowa wersja! 
+        <button onclick="applyUpdate()">ZAKTUALIZUJ</button>
+    </div>
+
+    <div class="login-box">
+        <h2 style="color: #2ecc71; margin-top: 0;">System ECO</h2>
+        <p style="color: #aaa; font-size: 14px; margin-bottom: 30px;">Zaloguj się do swojego panelu</p>
+        <input type="text" id="login" placeholder="Login">
+        <input type="password" id="haslo" placeholder="Hasło">
+        <button onclick="login()">WEJDŹ (ONLINE)</button>
+        
+        <div style="margin: 20px 0; border-bottom: 1px solid #444;"></div>
+        
+        <button class="btn-offline" onclick="loginOffline()">🌍 TRYB OFFLINE (TEREN)</button>
+        
+        <div id="errorMsg" class="error"></div>
+    </div>
+
+    <script>
+        let newWorker;
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // NAPRAWA: Zmieniono /sw.js na ./sw.js
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('[PWA] Service Worker Logowania Zarejestrowany');
+                    
+                    reg.addEventListener('updatefound', () => {
+                        newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                document.getElementById('updateBanner').style.display = 'block';
+                            }
+                        });
+                    });
+                }).catch(err => console.warn('[PWA] Błąd SW', err));
+
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        window.location.reload();
+                        refreshing = true;
+                    }
+                });
+            });
+        }
+
+        function applyUpdate() {
+            if (newWorker) {
+                newWorker.postMessage('SKIP_WAITING');
+            }
+        }
+
+        if (localStorage.getItem('user') && localStorage.getItem('ecoToken')) {
+            localStorage.removeItem('user');
+            localStorage.removeItem('ecoToken');
+        }
+
+        async function login() {
+            const log = document.getElementById('login').value;
+            const pass = document.getElementById('haslo').value;
+            const err = document.getElementById('errorMsg');
+            err.style.display = 'none';
+
+            if (!log || !pass) {
+                err.innerText = "Podaj login i hasło";
+                err.style.display = 'block';
+                return;
+            }
+
+            try {
+                const res = await fetch('./api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login: log, haslo: pass })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    localStorage.setItem('user', data.nazwa);
+                    if (data.token) localStorage.setItem('ecoToken', data.token);
+                    
+                    // NAPRAWA: Zmieniono przekierowania na relatywne i do poprawnego pliku
+                    if (data.rola === 'admin' || data.rola === 'kontroler') {
+                        window.location.href = './index.html';
+                    } else {
+                        alert("Brak uprawnień / Nieznana rola: " + data.rola);
+                    }
+                } else {
+                    err.innerText = data.error || "Błędny login lub hasło!";
+                    err.style.display = 'block';
+                }
+            } catch (e) {
+                console.error(e);
+                err.innerText = "Błąd połączenia. Na GitHub Pages użyj Trybu Offline.";
+                err.style.display = 'block';
+            }
+        }
+
+        function loginOffline() {
+            const nazwa = prompt("TRYB OFFLINE (Aplikacja Samodzielna)\\nPodaj swoje Imię, Nazwisko i Stanowisko (będą widoczne na protokołach):\\nnp. Jan Kowalski - podinsp. ds. kontroli");
+            
+            if (nazwa && nazwa.trim() !== "") {
+                localStorage.setItem('user', nazwa.trim());
+                localStorage.setItem('ecoToken', 'offline_mode');
+                // NAPRAWA: Przekierowanie do ./index.html
+                window.location.href = './index.html';
+            }
+        }
+
+        document.getElementById('haslo').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') login();
+        });
+    </script>
+</body>
+</html>
