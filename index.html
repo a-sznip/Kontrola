@@ -3,570 +3,671 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Zarządzania Kontrolami</title>
+    <title>Gmina - Panel Centralny v44.2 (Drzewo OSINT, Umorzenia & Metryki)</title>
     
-    <link rel="manifest" href="./manifest.json">
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#121212">
+    <link rel="apple-touch-icon" href="/icon-192.png">
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            min-height: 100vh;
+        :root { --primary: #2ecc71; --bg: #121212; --panel: #1e1e1e; --text: #e0e0e0; --accent: #3498db; --danger: #e74c3c; --warning: #f39c12; --archive: #7f8c8d; --sko: #d35400; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        
+        .navbar { display: flex; justify-content: space-between; align-items: center; background: #000; padding: 15px 30px; border-bottom: 3px solid var(--primary); margin-bottom: 30px; }
+        .brand { font-size: 24px; font-weight: 900; color: var(--primary); letter-spacing: 1px; cursor: pointer; }
+        .btn-logout { background: #c0392b; color: #fff; text-decoration: none; padding: 8px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; border: none; }
+        
+        .container { max-width: 1800px; margin: 0 auto; }
+        .card { background: var(--panel); padding: 30px; border-radius: 15px; border: 1px solid #333; min-height: 400px; }
+        .section-view { display: none; }
+        .section-view.active { display: block; }
+        .back-link { cursor: pointer; color: var(--primary); font-weight: bold; display: inline-block; margin-bottom: 15px; border: 1px solid var(--primary); padding: 5px 15px; border-radius: 20px; }
+
+        .tiles-container { display: flex; gap: 30px; justify-content: center; align-items: center; height: 60vh; flex-wrap: wrap; }
+        .tile { width: 300px; height: 220px; background: #222; border: 2px solid #333; border-radius: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: all 0.3s; position: relative; }
+        .tile:hover { transform: translateY(-10px); border-color: var(--primary); background: #2a2a2a; }
+        .tile-icon { font-size: 50px; margin-bottom: 15px; }
+        .tile-title { font-size: 20px; font-weight: bold; color: #fff; text-transform: uppercase; text-align: center; padding: 0 10px; }
+        .tile-count { position: absolute; top: 15px; right: 15px; background: var(--danger); color: #fff; padding: 5px 10px; border-radius: 20px; font-weight: bold; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 0; font-size: 13px; white-space: nowrap; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; vertical-align: middle; }
+        th { background: #111; color: var(--primary); text-transform: uppercase; font-size: 11px; }
+        tr:hover { background: rgba(255,255,255,0.03); }
+        .btn-action { padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; text-transform: uppercase; margin-right: 5px; }
+        .btn-preview { background: var(--accent); color: #fff; }
+        .btn-green { background: var(--primary); color: #000; }
+        .btn-red { background: var(--danger); color: #fff; }
+        .btn-warning { background: var(--warning); color: #000; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #1e1e1e; width: 900px; max-width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; border-radius: 12px; border: 1px solid #444; position: relative; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .form-group label { display: block; color: #888; font-size: 12px; margin-bottom: 5px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; background: #111; border: 1px solid #444; color: #fff; border-radius: 5px; font-weight: bold; box-sizing: border-box; }
+        .form-group input:disabled { background: #222; color: #666; cursor: not-allowed; }
+        .form-group textarea { font-family: 'Segoe UI', sans-serif; resize: vertical; }
+        
+        .big-input { font-size: 16px; border: 1px solid var(--primary) !important; background: #000 !important; color: #fff !important; }
+        
+        .photos-mini-container { display:flex; gap:10px; overflow-x:auto; margin-bottom:20px; padding-bottom:10px; border-bottom:1px solid #333; }
+        .photo-mini { height:200px; border-radius:8px; border:1px solid #555; cursor:pointer; object-fit: contain; background: #000; }
+
+        #editorModal .modal-content { width: 210mm; height: 95vh; background: #fff; color: #000; padding: 20mm; box-sizing: border-box; }
+        #documentEditor { width: 100%; height: 85%; overflow-y: auto; outline: none; border: 1px dashed #ccc; padding: 10px; font-family: 'Times New Roman', Times, serif; font-size: 14px; line-height: 1.3; }
+        .toolbar { background: #eee; padding: 10px; display: flex; gap: 10px; margin-bottom: 10px; border-radius: 5px; }
+
+        #updateBanner {
+            display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: var(--accent); color: #fff; padding: 15px 30px; border-radius: 8px;
+            text-align: center; font-size: 15px; font-weight: bold; z-index: 9999; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 2px solid #fff;
         }
-        .modal {
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-            z-index: 2000; /* WAŻNE: Ustawia modal ponad mapą Leaflet */
+        #updateBanner button {
+            background: #fff; color: var(--accent); border: none; padding: 8px 20px;
+            margin-left: 15px; border-radius: 6px; font-weight: 900; cursor: pointer; text-transform: uppercase;
         }
-        .modal-content {
-            transform: translateY(-20px);
-            transition: transform 0.3s ease;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        .modal.open .modal-content {
-            transform: translateY(0);
-        }
-        .participant-checkbox {
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            width: 1.25rem;
-            height: 1.25rem;
-            border: 2px solid #d1d5db;
-            border-radius: 0.25rem;
-            position: relative;
-            cursor: pointer;
-            outline: none;
-        }
-        .participant-checkbox:checked {
-            background-color: #2563eb;
-            border-color: #2563eb;
-        }
-        .participant-checkbox:checked::before {
-            content: '✓';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 0.875rem;
-        }
-        .signature-pad {
-            border: 2px solid #3b82f6;
-            background-color: #fff;
-            cursor: crosshair;
-            touch-action: none;
-            height: 12rem;
-        }
-        .pdf-container {
-            width: 700px;
-            padding: 15px; 
-            background-color: white;
-            font-size: 11px;
-        }
-        .pdf-container table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 10px;
-        }
-        .pdf-container th, .pdf-container td {
-            border: 1px solid #ccc;
-            padding: 6px;
-            text-align: left;
-            font-size: 11px;
-        }
-        .pdf-container h3 {
-            font-size: 14px;
-            font-weight: bold;
-            border-bottom: 1px solid #ccc;
-            margin-top: 10px;
-            padding-bottom: 4px;
-        }
-        .pdf-container p {
-            margin-bottom: 6px;
-        }
-        .visually-hidden {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border-width: 0;
-        }
-        .tab-button.active {
-            border-color: #2563eb;
-            color: #2563eb;
-            background-color: #eff6ff;
-        }
-        #identification-map { height: 65vh; }
-        #bulk-identification-map-container { position: relative; }
-        #bulk-identification-map { height: 65vh; }
-        #bulk-map-zoom-hint {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            z-index: 1001; /* Above map tiles */
-            pointer-events: none;
-            font-size: 0.8rem;
-        }
-        .leaflet-crosshair { cursor: crosshair; }
-        .center-marker {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 25px;
-            height: 41px;
-            margin-left: -12.5px;
-            margin-top: -41px;
-            pointer-events: none;
-            background-image: url('https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png');
-            background-size: contain;
-            background-repeat: no-repeat;
-            z-index: 1000;
-        }
-        #offline-map-selection { 
-            height: 40vh; 
-            min-height: 300px;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d5db;
-        }
-        .zoom-slider-container {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .zoom-slider-container input[type="range"] {
-            flex: 1;
-        }
-        #tile-counter-info.limit-exceeded {
-            color: #ef4444; /* red-500 */
-            font-weight: 700;
-        }
-        #tile-counter-info.limit-ok {
-            color: #22c55e; /* green-500 */
+        
+        .pojemnik-row { display: flex; gap: 10px; margin-bottom: 10px; background: #222; padding: 10px; border-radius: 5px; border-left: 4px solid var(--accent); }
+        .pojemnik-row select, .pojemnik-row input { flex: 1; padding: 8px; background: #111; border: 1px solid #444; color: #fff; border-radius: 4px; }
+        .pojemnik-row button { background: var(--danger); color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; color: #fff; }
+
+        #schedulerAlerts { max-height: 250px; overflow-y: auto; background: #000; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; display: none; }
+        .alert-group { padding: 10px; border-bottom: 1px solid #222; }
+        .alert-header { font-size: 11px; font-weight: bold; margin-bottom: 5px; letter-spacing: 1px; }
+        .alert-item { padding: 8px; border-radius: 4px; background: #1a1a1a; margin-bottom: 5px; cursor: pointer; border-left: 3px solid transparent; font-size: 13px; transition: background 0.2s; }
+        .alert-item:hover { background: #252525; }
+        .critical .alert-item { border-left-color: var(--danger); }
+        .warning .alert-item { border-left-color: var(--warning); }
+        .info .alert-item { border-left-color: #7f8c8d; }
+
+        .cal-container { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 10px; }
+        .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; color: #888; font-size: 12px; margin-bottom: 5px; font-weight: bold; }
+        .cal-day { background: #222; aspect-ratio: 1; border-radius: 4px; padding: 5px; position: relative; cursor: pointer; border: 1px solid #333; display: flex; flex-direction: column; justify-content: flex-start; }
+        .cal-day:hover { background: #333; border-color: #666; }
+        .cal-day.empty { background: transparent; border: none; cursor: default; }
+        .cal-day.today { border: 2px solid var(--primary); }
+        .day-num { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+        .day-events { display: flex; gap: 3px; flex-wrap: wrap; align-content: flex-start; }
+        .cal-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        @media print {
+            body > *:not(#editorModal) { display: none !important; }
+            body { margin: 0 !important; padding: 0 !important; background: white !important; }
+            #editorModal { display: block !important; position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: auto !important; min-height: 100vh !important; background: white !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; align-items: flex-start !important; justify-content: flex-start !important; }
+            #editorModal .modal-content { width: 100% !important; max-width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; border: none !important; }
+            #documentEditor { height: auto !important; overflow: visible !important; border: none !important; padding: 0 !important; margin: 0 !important; display: block !important; }
+            .toolbar { display: none !important; }
+            @page { margin: 2cm; size: A4; }
         }
     </style>
+</head>
+<body>
 
-    </head>
-<body class="p-4 sm:p-8">
-
-    <div id="app-view">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Panel Zarządzania (Lokalny) <span class="text-sm font-medium text-gray-400">v1.6</span></h1>
-            <button id="logout-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg shadow-md transition-colors duration-300 text-sm">Wyloguj</button>
-        </div>
-        
-        <div class="bg-white rounded-xl shadow-lg p-6 sm:p-8 max-w-4xl mx-auto">
-            <p class="text-xs text-gray-500 mb-4">Zalogowany jako: <span id="user-email" class="font-medium"></span> <span class="ml-4 font-bold text-blue-500"> (Tryb Lokalny)</span></p>
-            
-            <div class="border-b border-gray-200 mb-6">
-                <nav class="-mb-px flex space-x-4" aria-label="Tabs">
-                    <button id="tab-controls" class="tab-button active whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm">
-                        Kontrole
-                    </button>
-                    <button id="tab-identifications" class="tab-button whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                        Identyfikacja w Terenie
-                    </button>
-                    <button id="tab-bulk-identifications" class="tab-button whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                        Identyfikacja Zbiorcza
-                    </button>
-                </nav>
-            </div>
-
-            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-                <h3 class="font-bold text-gray-700 mb-2">Zarządzanie Danymi</h3>
-                <div class="flex flex-wrap gap-4">
-                    <button id="export-data-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md text-sm">Eksportuj Kopię Danych</button>
-                    <button id="import-data-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md text-sm">Importuj Kopię Danych</button>
-                    <input type="file" id="import-file-input" class="hidden" accept=".json,.txt">
-                    <button id="manage-offline-maps-btn" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg shadow-md text-sm">Zarządzaj Mapami Offline</button>
-                </div>
-            </div>
-            
-            <div id="controls-content-view">
-                 <div class="flex flex-wrap gap-4 mb-6">
-                    <input type="text" id="filter-address" placeholder="Filtruj kontrole po adresie..." class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]">
-                    <select type="text" id="filter-type" class="p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">Wszystkie typy kontroli</option>
-                        <option value="planowa">Planowa</option>
-                        <option value="interwencyjna">Interwencyjna</option>
-                    </select>
-                    <button id="add-control-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Dodaj kontrolę</button>
-                    <button id="add-joint-note-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Notatka Służbowa</button>
-                    <button id="clear-controls-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Wyczyść kontrole</button>
-                </div>
-                <div id="controls-list" class="space-y-4 mt-6"></div>
-            </div>
-
-            <div id="identifications-content-view" class="hidden">
-                 <div class="flex flex-wrap gap-4 mb-6">
-                    <button id="add-identification-btn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Nowa Identyfikacja</button>
-                    <button id="clear-identifications-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Wyczyść identyfikacje</button>
-                 </div>
-                <div id="identifications-list" class="space-y-4 mt-6"></div>
-            </div>
-
-            <div id="bulk-identification-content-view" class="hidden">
-                <div class="flex flex-wrap gap-4 mb-6 items-center">
-                    <p class="text-gray-700">Zaznaczono punktów: <strong id="bulk-points-counter" class="text-lg">0</strong></p>
-                    <button id="add-bulk-point-mode-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Dodaj Punkt</button>
-                    <button id="locate-me-bulk-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Moja Lokalizacja</button>
-                    <button id="generate-bulk-report-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Generuj Raport Zbiorczy</button>
-                    <button id="clear-bulk-points-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Wyczyść wszystko</button>
-                </div>
-                <p class="text-sm text-gray-500 mb-4">Użyj przycisku "Dodaj Punkt", aby aktywować tryb dodawania, a następnie kliknij na mapę. Kliknij na pinezkę, aby ją usunąć.</p>
-                <div id="bulk-identification-map-container">
-                    <div id="bulk-identification-map" class="w-full rounded-lg shadow-md border border-gray-300"></div>
-                    <div id="bulk-map-zoom-hint" class="hidden">Przybliż mapę, aby zobaczyć numery działek</div>
-                </div>
-            </div>
-        </div>
-
-        <div id="message-box" class="fixed bottom-8 right-8 p-4 rounded-lg text-white shadow-lg z-50 transition-opacity duration-300 opacity-0 hidden"></div>
-    </div>
-    
-    <div id="control-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
-        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl transition-transform duration-300">
-            <div class="flex justify-between items-center mb-4">
-                <h2 id="modal-title" class="text-2xl font-bold text-gray-800">Dodaj nową kontrolę</h2>
-                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
-            </div>
-            <form id="control-form" class="space-y-4">
-                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
-                    <div class="flex-1">
-                        <label for="control-street" class="block text-gray-700 font-medium mb-1">Ulica</label>
-                        <input type="text" id="control-street" required list="street-suggestions" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <datalist id="street-suggestions"></datalist>
-                    </div>
-                    <div class="flex-1">
-                        <label for="control-house-number" class="block text-gray-700 font-medium mb-1">Numer domu</label>
-                        <input type="text" id="control-house-number" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
-                    <div class="flex-1">
-                        <label for="control-city" class="block text-gray-700 font-medium mb-1">Miejscowość</label>
-                        <input type="text" id="control-city" required list="city-suggestions" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <datalist id="city-suggestions"></datalist>
-                    </div>
-                    <div class="flex-1">
-                        <label for="control-zip" class="block text-gray-700 font-medium mb-1">Kod pocztowy</label>
-                        <input type="text" id="control-zip" required pattern="[0-9]{2}-[0-9]{3}" placeholder="np. 12-345" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
-                    <div class="flex-1">
-                        <label for="control-plot-number" class="block text-gray-700 font-medium mb-1">Numer Działki (opcjonalnie)</label>
-                        <input type="text" id="control-plot-number" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div class="flex-1">
-                        <label for="control-geodetic-district" class="block text-gray-700 font-medium mb-1">Obręb Ewidencyjny (opcjonalnie)</label>
-                        <input type="text" id="control-geodetic-district" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-                <div>
-                    <label for="control-type" class="block text-gray-700 font-medium mb-1">Typ</label>
-                    <select id="control-type" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="planowa">Planowa</option>
-                        <option value="interwencyjna">Interwencyjna</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="control-date" class="block text-gray-700 font-medium mb-1">Data</label>
-                    <input type="date" id="control-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-                <div class="space-y-2">
-                    <label class="block text-gray-700 font-medium">Uczestnicy</label>
-                    <div id="participants-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        </div>
-                </div>
-                <div class="flex space-x-4">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Zapisz</button>
-                    <button type="button" id="delete-control-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Usuń</button>
-                    <button type="button" id="generate-protocol-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Generuj protokół</button>
-                </div>
-                <div class="pt-4 border-t mt-4">
-                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Powrót do panelu</button>
-                </div>
-            </form>
-        </div>
+    <div id="updateBanner">
+        Dostępna nowa wersja systemu! 
+        <button onclick="applyUpdate()">ZAKTUALIZUJ</button>
     </div>
 
-    <div id="protocol-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
-        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl transition-transform duration-300">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">Generowanie Protokołu Oględzin</h2>
-                <button id="close-protocol-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+    <nav class="navbar">
+        <div class="brand" onclick="showMainMenu()">GMINA - PANEL CENTRALNY</div>
+        <div><button onclick="logout()" class="btn-logout">WYLOGUJ</button></div>
+    </nav>
+
+    <div class="container">
+        <div id="schedulerAlerts"></div>
+
+        <div id="mainMenu" class="tiles-container">
+            <div class="tile" onclick="openSection('zgloszenia')"><div class="tile-count" id="count-zgloszenia">0</div><div class="tile-icon">📨</div><div class="tile-title">ZGŁOSZENIA</div></div>
+            <div class="tile" onclick="openSection('postepowania')"><div class="tile-count" id="count-postepowania" style="background:var(--warning); color:#000;">0</div><div class="tile-icon">⚖️</div><div class="tile-title">POSTĘPOWANIA</div></div>
+            
+            <div class="tile" onclick="openCalendar()" style="border-color: #fff;">
+                <div class="tile-count" id="schedulerBadge" style="display:none; background:var(--danger);">0</div>
+                <div class="tile-icon">📅</div>
+                <div class="tile-title">ASYSTENT TERMINÓW<br><span style="font-size:10px; color:#aaa;">Kalendarz KPA</span></div>
             </div>
-            <form id="protocol-form" class="space-y-4">
-                <div>
-                    <label for="protocol-date" class="block text-gray-700 font-medium mb-1">Data oględzin</label>
-                    <input type="date" id="protocol-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+            <div class="tile" onclick="openSection('sko')" style="border-color: var(--sko);"><div class="tile-count" id="count-sko" style="background:var(--sko); color:#fff;">0</div><div class="tile-icon">🏛️</div><div class="tile-title">SKO (ODWOŁANIA)</div></div>
+            <div class="tile" onclick="openSection('archiwum')" style="border-color: var(--archive);"><div class="tile-count" id="count-archiwum" style="background:var(--archive); color:#fff;">0</div><div class="tile-icon">🗄️</div><div class="tile-title">ARCHIWUM</div></div>
+            
+            <div class="tile" onclick="openSection('referencje')" style="border-color: #f1c40f;">
+                <div class="tile-icon">📊</div>
+                <div class="tile-title">BAZA REFERENCYJNA<br><span style="font-size: 10px; color:#aaa;">Wzorce U.C.P.G.</span></div>
+            </div>
+
+            <div class="tile" onclick="openSection('baza')"><div class="tile-icon">🏠</div><div class="tile-title">BAZA ADRESOWA</div></div>
+            <div class="tile" onclick="openSection('users')" style="border-color: #e67e22;"><div class="tile-icon">👥</div><div class="tile-title">UŻYTKOWNICY</div></div>
+            <div class="tile" onclick="openSection('settings')" style="border-color: #9b59b6;"><div class="tile-icon">📜</div><div class="tile-title">REGUŁY PRAWNE</div></div>
+            <div class="tile" onclick="openSection('urzad')" style="border-color: #3498db;"><div class="tile-icon">📈</div><div class="tile-title">HISTORIA STAWEK<br><span style="font-size: 10px; color:#aaa;">(Oś czasu opłat)</span></div></div>
+            
+            <div class="tile" onclick="openSection('inspectors')" style="border-color: #1abc9c;">
+                <div class="tile-icon">🕵️</div>
+                <div class="tile-title">KONTROLERZY<br><span style="font-size: 10px; color:#aaa;">Słownik Terenowy</span></div>
+            </div>
+        </div>
+
+        <div id="referencjeSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2 style="color: #f1c40f;">📊 Baza Podmiotów Referencyjnych (Matryca Szacowania)</h2>
+            <div class="card">
+                <div style="background:#111; padding:20px; border-radius:10px; margin-bottom:20px; border:1px solid #333;">
+                    <p style="color:#aaa; font-size:13px; margin-bottom:15px;">Aby zaimportować listę podmiotów (np. niezamieszkałych) bezpośrednio z pliku CSV bez konieczności wpisywania branż, użyj poniższego przycisku. System sklasyfikuje je wstępnie jako "Niesklasyfikowane" i pozwoli na szybkie dodanie branży z poziomu tworzenia decyzji.</p>
+                    <button onclick="document.getElementById('csvRefInput').click()" style="padding:12px 20px; background:#f1c40f; color:#000; border:none; cursor:pointer; font-weight:bold; border-radius:8px; font-size:14px;">📂 WGRAJ BAZĘ REFERENCYJNĄ (CSV)</button>
+                    <input type="file" id="csvRefInput" style="display:none" accept=".csv,.txt" onchange="uploadRefCSV()">
+                    <div id="uploadRefStatus" style="margin-top:15px; font-weight:bold; font-size:14px;"></div>
                 </div>
-                <div>
-                    <label for="protocol-case" class="block text-gray-700 font-medium mb-1">Sprawa</label>
-                    <textarea id="protocol-case" rows="3" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-                <div class="space-y-2">
-                    <label class="block text-gray-700 font-medium">Obecni</label>
-                    <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
-                        <div class="flex-1">
-                            <label for="protocol-union-reps" class="block text-gray-700 mb-1">Przedstawiciele Związku</label>
-                            <textarea id="protocol-union-reps" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                            <div class="mt-2 text-sm text-gray-500">Automatycznie uzupełnione z danych kontroli.</div>
-                        </div>
-                        <div class="flex-1">
-                            <label for="protocol-admin-reps" class="block text-gray-700 mb-1">Inni przedstawiciele organów administracji</label>
-                            <textarea id="protocol-admin-reps" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                        </div>
-                    </div>
-                </div>
-                <div>
-                    <label for="protocol-parties" class="block text-gray-700 font-medium mb-1">Strony i ich pełnomocnicy</label>
-                    <textarea id="protocol-parties" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-                <div>
-                    <label for="protocol-witnesses" class="block text-gray-700 font-medium mb-1">Świadkowie</label>
-                    <textarea id="protocol-witnesses" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-                <div class="note-selection-container p-4 bg-gray-100 rounded-lg">
-                    <label class="block text-gray-700 font-medium mb-2">Dodaj notatki</label>
-                    <div id="note-categories" class="flex flex-wrap gap-2 mb-2"></div>
-                    <div id="note-list" class="flex flex-wrap gap-2"></div>
-                </div>
-                <div>
-                    <label for="protocol-findings" class="block text-gray-700 font-medium mb-1">Ustalono co następuje</label>
-                    <textarea id="protocol-findings" rows="5" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-                <div class="space-y-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <label class="block text-gray-700 font-medium mb-1">Dodaj zdjęcia z aparatu / pliku</label>
-                    <input type="file" id="protocol-photos-input" accept="image/*" multiple capture="environment" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <div id="photos-preview-container" class="mt-4 flex flex-wrap gap-3">
-                        </div>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                <button class="btn-action btn-green" onclick="openRefModal()" style="margin-bottom:20px; padding:12px;">➕ DODAJ PODMIOT WZORCOWY (RĘCZNIE)</button>
+                <table id="tableReferences">
+                    <thead><tr><th>Sektor / Branża</th><th>Lokalizacja</th><th>Adres Wzorca i Opis</th><th>Frakcje (Rozbite)</th><th>Akcja</th></tr></thead>
+                    <tbody id="bodyReferences"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="zgloszeniaSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2>📨 Skrzynka Odbiorcza</h2>
+            <div class="card">
+                
+                <div style="background:#111; padding:15px 25px; border-radius:10px; margin-bottom:20px; border:1px solid #333; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
                     <div>
-                        <label class="block text-gray-700 font-medium mb-1">Podpis przedstawicieli Związku</label>
-                        <canvas id="union-signature-pad" class="signature-pad w-full h-48"></canvas>
-                        <button type="button" id="clear-union-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                        <h3 style="margin:0; color:#3498db; font-size:18px;">📥 Import paczki z terenu (Offline)</h3>
+                        <p style="margin:5px 0 0 0; font-size:12px; color:#aaa;">Wgraj plik <b>.eco</b> (lub .json) wygenerowany w aplikacji mobilnej kontrolera, aby wstrzyknąć dowody.</p>
                     </div>
                     <div>
-                        <label class="block text-gray-700 font-medium mb-1">Podpis stron i osób obecnych</label>
-                        <canvas id="parties-signature-pad" class="signature-pad w-full h-48"></canvas>
-                        <button type="button" id="clear-parties-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
+                        <button onclick="document.getElementById('ecoInput').click()" style="padding:12px 20px; background:#3498db; color:#fff; border:none; cursor:pointer; font-weight:bold; border-radius:8px;">📂 ZAIMPORTUJ PACZKĘ (.eco)</button>
+                        <input type="file" id="ecoInput" style="display:none" accept=".eco,.json" onchange="uploadEcoFile()">
                     </div>
+                    <div id="uploadEcoStatus" style="width:100%; font-weight:bold; font-size:13px; margin-top:5px;"></div>
                 </div>
-                <div class="flex space-x-4">
-                    <button type="button" id="save-protocol-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Zapisz protokół</button>
-                    <button type="button" id="delete-protocol-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Usuń protokół</button>
-                    <button type="button" id="finalize-protocol-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Generuj i pobierz protokół</button>
+
+                <table id="tableZgloszenia"><thead><tr><th>Data</th><th>Adres / Właściciel</th><th>Wstępny Typ</th><th>Akcja</th></tr></thead><tbody id="bodyZgloszenia"></tbody></table>
+            </div>
+        </div>
+
+        <div id="inspectorsSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2 style="color: #1abc9c;">🕵️ Słownik Kontrolerów Terenowych</h2>
+            <div class="card">
+                <p style="color:#aaa; font-size:13px; margin-bottom:20px;">Ten słownik jest pobierany automatycznie przez aplikację mobilną dla kontrolerów. Dzięki temu zawsze mają oni do wyboru aktualną listę pracowników do wpisania do protokołu.</p>
+                <button class="btn-action btn-green" onclick="openInspectorModal()" style="margin-bottom:20px; padding:12px;">➕ DODAJ PRACOWNIKA</button>
+                <table id="tableInspectors">
+                    <thead><tr><th>ID Wewnętrzne</th><th>Imię, Nazwisko i Stanowisko Służbowe</th><th>Akcja</th></tr></thead>
+                    <tbody id="bodyInspectors"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="postepowaniaSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2>⚖️ Rejestr Postępowań</h2>
+            <div class="card"><table id="tablePostepowania"><thead><tr><th>Znak Sprawy</th><th>Adres</th><th>Kategoria</th><th>Data Wszczęcia</th><th>Akcja</th></tr></thead><tbody id="bodyPostepowania"></tbody></table></div>
+        </div>
+
+        <div id="skoSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2 style="color: var(--sko);">🏛️ Rejestr spraw w Samorządowym Kolegium Odwoławczym</h2>
+            <div class="card">
+                <table id="tableSko"><thead><tr><th>Znak Sprawy</th><th>Adres</th><th>Kategoria</th><th>Status</th><th>Akcja</th></tr></thead><tbody id="bodySko"></tbody></table>
+            </div>
+        </div>
+
+        <div id="archiwumSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2 style="color: var(--archive);">🗄️ Archiwum Zakończonych Spraw</h2>
+            <div class="card">
+                <table id="tableArchiwum"><thead><tr><th>Znak Sprawy</th><th>Adres</th><th>Kategoria</th><th>Status</th><th>Akcja</th></tr></thead><tbody id="bodyArchiwum"></tbody></table>
+            </div>
+        </div>
+
+        <div id="bazaSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2>🏠 Baza Adresowa</h2>
+            <div class="card">
+                <div style="background:#111; padding:20px; border-radius:10px; margin-bottom:20px; border:1px solid #333;">
+                    <p>Załadowane rekordy: <b id="dbCount" style="color:#fff;">...</b></p>
+                    <p>Ostatnia aktualizacja: <b id="dbDate" style="color:#fff;">...</b></p>
                 </div>
-                <div class="pt-4 border-t mt-4">
-                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Powrót do panelu</button>
+                <div style="padding:40px 20px; border:2px dashed #444; text-align:center; border-radius:10px;">
+                    <button onclick="document.getElementById('csvInput').click()" style="padding:15px 30px; background:var(--accent); color:#fff; border:none; cursor:pointer; font-weight:bold; border-radius:8px; font-size:16px;">📂 WGRAJ NOWĄ BAZĘ KONTRAHENTÓW CSV</button>
+                    <input type="file" id="csvInput" style="display:none" accept=".csv,.txt" onchange="uploadCSV()">
+                    <div id="uploadStatus" style="margin-top:20px; font-weight:bold;"></div>
                 </div>
-            </form>
+            </div>
+        </div>
+
+        <div id="usersSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2 style="color: #e67e22;">👥 Użytkownicy</h2>
+            <div class="card">
+                <button class="btn-action btn-green" onclick="openUserModal()" style="margin-bottom:20px; padding:12px;">➕ DODAJ UŻYTKOWNIKA</button>
+                <table><thead><tr><th>Login</th><th>Nazwa</th><th>Rola</th><th>Akcja</th></tr></thead><tbody id="bodyUsers"></tbody></table>
+            </div>
+        </div>
+
+        <div id="settingsSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2 style="color: #9b59b6;">📜 Inteligentny Silnik Reguł Prawnych</h2>
+            <div class="card">
+                <button class="btn-action btn-green" onclick="openRuleModal()" style="margin-bottom:20px; padding:12px;">➕ DODAJ NOWĄ REGUŁĘ PRAWNĄ</button>
+                <table>
+                    <thead><tr><th>Typ Pisma</th><th>Kategoria Sprawy</th><th>Ważne OD</th><th>Ważne DO</th><th>Akcja</th></tr></thead>
+                    <tbody id="bodyRules"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="urzadSection" class="section-view">
+            <div class="back-link" onclick="showMainMenu()">⬅ WRÓĆ</div>
+            <h2 style="color: #3498db;">📈 Historia Stawek Podatkowych (Oś Czasu)</h2>
+            <div class="card">
+                <button class="btn-action btn-green" onclick="openRateModal()" style="margin-bottom:20px; padding:12px 30px;">➕ DODAJ NOWY OKRES TARYFOWY</button>
+                <table>
+                    <thead><tr><th>Obowiązuje OD</th><th>Obowiązuje DO</th><th>Stawka Osoba</th><th>Ryczałt Roczny</th><th>Mnożnik Kary</th><th>Akcja</th></tr></thead>
+                    <tbody id="bodyRates"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="inspectorModal" class="modal-overlay">
+        <div class="modal-content" style="width: 500px;">
+            <h3 style="color:#1abc9c; margin-top:0;">🕵️ Pracownik Terenowy (Słownik)</h3>
+            <input type="hidden" id="inspId">
+            <div class="form-group">
+                <label>Imię, Nazwisko i Pełne Stanowisko Służbowe</label>
+                <input type="text" id="inspNazwa" placeholder="np. Jan Kowalski - podinsp. ds. kontroli" class="big-input">
+            </div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn-action btn-green" style="flex:1; padding:12px;" onclick="saveInspector()">💾 ZAPISZ W SŁOWNIKU</button>
+                <button class="btn-action btn-red" style="flex:1; padding:12px;" onclick="document.getElementById('inspectorModal').style.display='none'">ANULUJ</button>
+            </div>
         </div>
     </div>
 
-    <div id="joint-note-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
-        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl transition-transform duration-300">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">Notatka Służbowa (z Protokołów)</h2>
-                <button id="close-joint-note-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
-            </div>
-            <form id="joint-note-form" class="space-y-4">
-                <div class="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
-                    <label for="joint-note-date-filter" class="block text-gray-700 font-medium mb-1">Data kontroli (do filtrowania)</label>
-                    <div class="flex space-x-2">
-                        <input type="date" id="joint-note-date-filter" required class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button type="button" id="filter-joint-note-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Filtruj protokoły</button>
-                    </div>
+    <div id="refModal" class="modal-overlay">
+        <div class="modal-content" style="width: 800px;">
+            <h3 style="color:#f1c40f; margin-top:0;">📋 Dodaj Wzorzec (OCR)</h3>
+            <input type="hidden" id="refId">
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Sektor Działalności (Kaskada 1)</label>
+                    <select id="refSektor" onchange="updateRefSubcategory()" class="big-input">
+                        <option value="Gastronomia">Gastronomia</option>
+                        <option value="Handel Spożywczy">Handel Spożywczy</option>
+                        <option value="Handel Przemysłowy">Handel Przemysłowy</option>
+                        <option value="Turystyka, Noclegi i Rekreacja">Turystyka, Noclegi i Rekreacja</option>
+                        <option value="Usługi Rzemieślnicze i Techniczne">Usługi Rzemieślnicze i Techniczne</option>
+                        <option value="Usługi Medyczne i Beauty">Usługi Medyczne i Beauty</option>
+                        <option value="Edukacja i Opieka">Edukacja i Opieka</option>
+                        <option value="Biura i Finanse">Biura i Finanse</option>
+                        <option value="Przemysł i Inne">Przemysł i Inne</option>
+                    </select>
                 </div>
+                <div class="form-group">
+                    <label>Specyfika (Kaskada 2)</label>
+                    <select id="refBranza" class="big-input"></select>
+                </div>
+                <div class="form-group">
+                    <label>Lokalizacja (Natężenie)</label>
+                    <select id="refLokalizacja" class="big-input">
+                        <option value="Ścisłe Centrum">Ścisłe Centrum</option>
+                        <option value="Osiedle Mieszkaniowe">Osiedle Mieszkaniowe</option>
+                        <option value="Peryferie / Przemysłowa">Peryferie / Strefa Przemysłowa</option>
+                        <option value="Galeria / Pasaż">Galeria / Pasaż Handlowy</option>
+                        <option value="Strefa Nadwodna / Turystyczna">Strefa Nadwodna / Turystyczna</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Krótki opis identyfikacyjny</label><input type="text" id="refOpis" placeholder="np. Sklep pow. ok 100m2"></div>
                 
-                <div id="joint-note-protocols-summary" class="space-y-4 p-4 bg-gray-50 rounded-lg hidden">
-                    <p id="protocols-count" class="font-semibold text-gray-700"></p>
-                    <p class="text-xs text-red-500">Uwaga: Wygenerowana notatka będzie zawierać tylko dane z protokołów, które zostały **wcześniej zapisane**.</p>
+                <div class="form-group" style="grid-column: span 2;">
+                    <label style="color: var(--primary);">Dokładny adres podmiotu referencyjnego (Zabezpieczenie dowodowe SKO - Niewidoczne w Decyzji)</label>
+                    <input type="text" id="refDokladnyAdres" class="big-input" placeholder="np. ul. Warszawska 10, 11-500 Giżycko">
+                </div>
+            </div>
+
+            <h4 style="color:var(--primary); border-bottom: 1px solid #333; margin-top: 10px;">Dane z Deklaracji (Kopiuj z PDF)</h4>
+            <textarea id="refImportText" style="width:100%; height:120px; background:#111; color:#fff; border:1px dashed var(--primary); padding:10px; border-radius:5px; margin-bottom: 10px;" placeholder="Wklej tutaj treść tabeli pojemników z PDF..."></textarea>
+            <button onclick="parseRefImport()" class="btn-action" style="background:#555; color:#fff; width: 100%; padding: 10px; margin-bottom: 15px;">🔍 ODCZYTAJ OCR</button>
+            
+            <div id="refContainerList" style="background: #1a1a1a; padding: 15px; border: 1px solid #444; border-radius: 8px; min-height: 50px;">
+                <p style="color:#666; font-size: 12px; margin:0;">Zdekodowane pojemniki pojawią się tutaj...</p>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="saveReference()" class="btn-action btn-green" style="flex:1; padding:15px;">💾 ZAPISZ DO BAZY</button>
+                <button onclick="document.getElementById('refModal').style.display='none'" class="btn-action btn-red" style="flex:1; padding:15px;">ANULUJ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="estimatorModal" class="modal-overlay" style="z-index: 2000;">
+        <div class="modal-content" style="width: 1000px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                <h3 style="color:#f1c40f; margin:0;">⚖️ Oszacowanie Zapotrzebowania</h3>
+                <button onclick="document.getElementById('estimatorModal').style.display='none'" class="btn-logout" style="padding:5px 15px;">X</button>
+            </div>
+
+            <div style="background: rgba(52, 152, 219, 0.1); border: 1px dashed var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="color:var(--accent); margin-top:0; margin-bottom:5px;">🔎 Krok 1 (Opcjonalny): Szybkie Tagowanie (Baza Importu)</h4>
+                <p style="font-size: 11px; color:#aaa; margin-top:0; margin-bottom: 10px;">Wyszukaj niesklasyfikowany podmiot z pliku CSV (np. po nazwie lub adresie), nadaj mu branżę i przenieś do zaufanej puli wzorców.</p>
+                <div style="display:flex; gap:10px; margin-bottom: 10px;">
+                    <input type="text" id="estSearchRaw" class="big-input" style="flex:1;" placeholder="Szukaj po nazwie lub adresie (np. Kebab, Warszawska)..." oninput="searchRawReferences()">
+                </div>
+                <div id="rawRefList" style="max-height: 250px; overflow-y: auto;">
+                    <p style="color:#666; font-size:12px; margin:0;">Wpisz min. 3 znaki, aby przeszukać bazę...</p>
+                </div>
+            </div>
+            
+            <p style="font-size: 12px; color:#aaa;">Krok 2: Zbuduj strukturę badanej nieruchomości wielopodmiotowej z wcześniej sklasyfikowanych wzorców.</p>
+            
+            <div class="form-grid" style="grid-template-columns: 1fr 200px; background: rgba(241, 196, 15, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #f1c40f;">
+                <div class="form-group">
+                    <label style="color:#f1c40f;">Wybierz Skonfigurowaną Branżę</label>
+                    <select id="estFilterBranza" class="big-input" onchange="filterEstimatorList(); updateOsintLabel();"></select>
+                </div>
+                <div class="form-group">
+                    <label style="color:#f1c40f;">Ile takich podmiotów?</label>
+                    <input type="number" id="estMnoznik" class="big-input" value="1" min="1">
+                </div>
+                <div class="form-group" style="grid-column: span 2;">
+                    <label id="estOsintLabel" style="color:#f1c40f; font-weight: bold;">Uzasadnienie OSINT (Wymagane min. 30 znaków). Na jakiej podstawie twierdzisz, że podmiot jest pod tym adresem?</label>
+                    <textarea id="estOsint" class="big-input" style="height: 80px;" placeholder="Np. Oficjalna wizytówka Google Maps oraz strona internetowa podmiotu bezspornie wskazuje adres objęty postępowaniem..."></textarea>
+                </div>
+                <div class="form-group" style="grid-column: span 2;">
+                    <button onclick="addToEstimationCart()" class="btn-action btn-green" style="width:100%; padding:12px; font-size: 14px;">➕ DODAJ DO STRUKTURY (Wymaga zaznaczenia min. 2 wzorców z listy poniżej)</button>
+                </div>
+            </div>
+
+            <p style="font-size: 12px; font-weight: bold; margin-bottom: 5px;">Wzorce rynkowe dla wybranej branży:</p>
+            <div style="max-height: 250px; overflow-y: auto; background: #111; border: 1px solid #444; padding: 10px; border-radius: 8px; margin-bottom: 20px;" id="estimatorList">
+            </div>
+
+            <h4 style="color:var(--primary); border-bottom: 1px solid #333;">🛒 Zidentyfikowana struktura nieruchomości</h4>
+            <div id="estimationCart" style="background: #1a1a1a; padding: 15px; border: 1px dashed var(--primary); border-radius: 8px; margin-bottom: 20px; min-height: 50px;">
                 </div>
 
-                <div>
-                    <label for="joint-note-city" class="block text-gray-700 font-medium mb-1">Miejscowość sporządzenia</label>
-                    <input type="text" id="joint-note-city" value="Giżycko" required class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div style="display:flex; gap:10px;">
+                <button onclick="applyCartEstimation()" class="btn-action" style="flex:1; padding:15px; background: #f1c40f; color: #000; font-weight: bold;">🧮 WYLICZ I WSTAW DO AKT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editDataModal" class="modal-overlay" data-mode="new">
+        <div class="modal-content" style="width: 1100px;">
+            <div class="modal-header" style="font-size: 18px; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Formularz Danych Sprawy i Ofertowania</div>
+            
+            <div id="kontrolerInfo" style="display:none; background: rgba(52, 152, 219, 0.2); border-left: 4px solid #3498db; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+                <h4 style="color:#3498db; margin-top:0; margin-bottom:5px;">🕵️ DOKUMENT Z KONTROLI URZĘDOWEJ</h4>
+                <p style="font-size: 12px; color:#ccc; margin:0;">Zgłaszający urzędnik: <b id="kontrolerZglaszajacy" style="color:#fff;"></b> | Dodatkowe tagi: <b id="kontrolerKat" style="color:#fff;"></b></p>
+                <p style="font-size: 11px; color:#aaa; margin-top:5px; margin-bottom:0;">Zgłoszenie pochodzi z systemu kontroli. Na podstawie dołączonych materiałów oraz poniższego opisu wskaż odpowiednią kwalifikację czynu administracyjnego.</p>
+            </div>
+
+            <div id="editPhotos" class="photos-mini-container"></div>
+
+            <h4 style="color:var(--warning); border-bottom: 1px solid #333; padding-bottom:5px;">⚙️ Kwalifikacja Czynu (Wymagane do doboru prawa)</h4>
+            <div class="form-grid">
+                <div class="form-group" style="grid-column: span 2;">
+                    <label>Kategoria Sprawy (Algorytm Prawny)</label>
+                    <select id="editKategoriaSprawy" class="big-input" onchange="toggleEstimatorBtn()" style="border-color: var(--warning) !important;">
+                        <option value="brak_segregacji">Brak segregacji odpadów</option>
+                        <option value="brak_deklaracji_firma">Brak deklaracji</option>
+                        <option value="niezgloszona_osoba">Niezgłoszona osoba</option>
+                        <option value="nadmiary">Nadmiar odpadów / Przepełnienie pojemników</option>
+                    </select>
                 </div>
-                <div>
-                    <label for="joint-note-subject" class="block text-gray-700 font-medium mb-1"> Uwagi </label>
-                    <textarea id="joint-note-subject" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                <div class="form-group"><label style="color:var(--danger); font-weight:bold;">DATA NARUSZENIA</label><input type="date" id="editDataNieprawidlowosci" class="big-input" style="border-color: var(--danger) !important;"></div>
+                <div class="form-group"><label>ZNAK SPRAWY</label><input type="text" id="editZnak" class="big-input"></div>
+            </div>
+
+            <h4 style="color:var(--accent); border-bottom: 1px solid #333; padding-bottom:5px;">📝 Uzasadnienie Faktyczne</h4>
+            <div class="form-grid"><div class="form-group" style="grid-column: span 2;"><textarea id="editOpisFaktyczny" class="big-input" style="height: 100px; font-weight: normal; font-size: 14px;"></textarea></div></div>
+
+            <h4 style="color:var(--accent); border-bottom: 1px solid #333;">📍 Adres i Podmiot</h4>
+            <div class="form-grid">
+                <div class="form-group"><label>Właściciel / Podmiot</label><input type="text" id="editWlasciciel"></div>
+                <div class="form-group"><label>Adres Nieruchomości</label><input type="text" id="editAdres"></div>
+                <div class="form-group"><label>Kod Pocztowy</label><input type="text" id="editKod"></div>
+                <div class="form-group"><label>Poczta / Gmina</label><input type="text" id="editPoczta"></div>
+            </div>
+
+            <div class="form-group"><label style="color:var(--warning); cursor:pointer;"><input type="checkbox" id="editCheckKorespondencja" onchange="toggleKorespondencyjny()"> Inny adres korespondencyjny</label></div>
+            <div id="korespondencyjnyForm" style="display:none; background: rgba(243,156,18,0.1); padding:15px; border-radius:8px; margin-bottom:20px;">
+                <div class="form-grid">
+                    <div class="form-group"><label>Adres Koresp.</label><input type="text" id="editAdresKoresp"></div>
+                    <div class="form-group"><label>Kod i Poczta Koresp.</label><input type="text" id="editPocztaKoresp"></div>
+                </div>
+            </div>
+
+            <h4 style="color:var(--primary); border-bottom: 1px solid #333;">📋 Moduł Matematyczny</h4>
+            <div class="form-grid">
+                <div class="form-group" style="grid-column: span 2;">
+                    <label>Typ Nieruchomości</label>
+                    <select id="editTypNieruchomosci" onchange="toggleTypNieruchomosci(); toggleEstimatorBtn();" class="big-input" style="border-color: var(--primary) !important;">
+                        <option value="zamieszkała">Nieruchomość Zamieszkała (Osoby)</option>
+                        <option value="niezamieszkała">Nieruchomość Niezamieszkała / Firma (Zestawienie pojemników u źródła)</option>
+                        <option value="ryczałt">Domek letniskowy / Nieruchomość rekreacyjna (Ryczałt)</option>
+                    </select>
                 </div>
 
-                <div class="space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <label class="block text-gray-700 font-medium">Autorzy Notatki (pobrani z Protokółów)</label>
-                    <div id="joint-note-participants-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div class="form-group zamieszkala-only"><label>Liczba osób</label><input type="number" id="editLiczbaOsob" class="big-input"></div>
+
+                <div class="form-group niezamieszkala-only" style="grid-column: span 2; display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label style="color: var(--primary);">Wykaz Zadeklarowanych/Ustalonych Pojemników (Stan Faktyczny / Dowód w sprawie)</label>
+                        <div style="display:flex; gap: 5px;">
+                            <button onclick="openImportModal()" class="btn-action" style="background:#555; color:#fff;">📋 IMPORT Z PDF</button>
+                            <button id="estimatorBtn" onclick="openEstimatorModal()" class="btn-action" style="background:#f1c40f; color:#000; display:none;">📊 OSZACUJ Z BAZY (Złożone)</button>
+                            <button onclick="addPojemnikRow()" class="btn-action btn-green">➕ DODAJ POJEMNIK</button>
                         </div>
+                    </div>
+                    <div id="containerList" style="background: #1a1a1a; padding: 15px; border: 1px dashed #444; border-radius: 8px;"></div>
                 </div>
-                
-                <div>
-                    <label class="block text-gray-700 font-medium mb-1">Podpis (opcjonalny)</label>
-                    <canvas id="joint-note-signature-pad" class="signature-pad w-full h-32"></canvas>
-                    <button type="button" id="clear-joint-note-signature" class="mt-1 text-sm text-gray-500 hover:text-gray-700">Wyczyść podpis</button>
-                </div>
-                <button type="button" id="finalize-joint-note-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 w-full" disabled>Generuj i pobierz Notatkę (PDF)</button>
-                <div class="pt-4 border-t mt-4">
-                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300">Powrót do panelu</button>
-                </div>
-            </form>
+
+                <div class="form-group ryczalt-only" style="display:none; grid-column: span 2;"></div>
+
+                <div class="form-group"><label>Status prawny podmiotu</label><select id="editStatusPrawny"><option value="właścicielem">Właściciel</option><option value="zarządcą">Zarządca</option><option value="wspólnotą">Wspólnota</option></select></div>
+                <div class="form-group"><label>Okres Decyzji OD</label><input type="month" id="editMiesiacOd"></div>
+                <div class="form-group"><label>Okres Decyzji DO</label><input type="month" id="editMiesiacDo"></div>
+            </div>
+
+            <div style="text-align:right; margin-top:20px;">
+                <button onclick="saveCaseData()" class="btn-action btn-green" style="padding:15px 30px;">💾 ZAPISZ DANE</button>
+                <button onclick="closeEditModal()" class="btn-logout">ANULUJ</button>
+            </div>
+            
+            <div id="startProcSection" style="display:none; text-align:center; margin-top:20px; border-top:1px solid #333; padding-top:20px;">
+                <button onclick="confirmStart()" style="padding:15px 40px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-weight:bold;">⚖️ WSZCZNIJ POSTĘPOWANIE</button>
+            </div>
         </div>
     </div>
-    
-    <div id="identification-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
-        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl transition-transform duration-300 flex flex-col">
-            <div class="flex justify-between items-center mb-4">
-                <h2 id="identification-modal-title" class="text-2xl font-bold text-gray-800">Nowa Identyfikacja Terenowa</h2>
-                <button id="close-identification-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+
+    <div id="ruleModal" class="modal-overlay">
+        <div class="modal-content" style="width: 600px;">
+            <h3 style="color:var(--primary); margin-top:0;">Edytor Reguły Prawnej</h3>
+            <input type="hidden" id="rId">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Typ Pisma</label>
+                    <select id="rTyp">
+                        <option value="wszczecie">Postanowienie o wszczęciu</option>
+                        <option value="wezwanie">Wezwanie z art. 274a</option>
+                        <option value="termin7">Zawiadomienie 7-dniowe</option>
+                        <option value="decyzja">Decyzja wymiarowa</option>
+                        <option value="umorzenie">Decyzja o umorzeniu (złożono deklarację)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Kategoria Sprawy</label>
+                    <select id="rKat">
+                        <option value="brak_segregacji">Brak segregacji</option>
+                        <option value="brak_deklaracji_firma">Brak deklaracji (Firma)</option>
+                        <option value="niezgloszona_osoba">Niezgłoszona osoba</option>
+                        <option value="nadmiary">Nadmiary odpadów</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Ważne OD (Data naruszenia)</label><input type="date" id="rOd"></div>
+                <div class="form-group"><label>Ważne DO (Opcjonalnie)</label><input type="date" id="rDo"></div>
+                <div class="form-group" style="grid-column: span 2;">
+                    <label>Treść Paragrafu (Można używać HTML / **pogrubień**)</label>
+                    <textarea id="rTresc" style="height: 150px; font-family: monospace;"></textarea>
+                </div>
             </div>
-            <form id="identification-form" class="space-y-4 flex-1 flex flex-col">
-                <div id="identification-map-step" class="flex-1 flex flex-col">
+            <div style="display:flex; gap:10px;">
+                <button class="btn-action btn-green" style="flex:1; padding:12px;" onclick="saveRule()">💾 ZAPISZ</button>
+                <button class="btn-action btn-red" style="flex:1; padding:12px;" onclick="document.getElementById('ruleModal').style.display='none'">ANULUJ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rateModal" class="modal-overlay">
+        <div class="modal-content" style="width: 700px;">
+            <h3 style="color:var(--primary); margin-top:0;">Matryca Stawek i Pojemników</h3>
+            <input type="hidden" id="rateId">
+            <div class="form-grid">
+                <div class="form-group"><label>Obowiązuje OD</label><input type="date" id="rateOd"></div>
+                <div class="form-group"><label>Obowiązuje DO (Opcjonalnie)</label><input type="date" id="rateDo"></div>
+                <div class="form-group"><label>Stawka na osobę (zł)</label><input type="number" id="rateOsoba" step="0.01"></div>
+                <div class="form-group"><label>Ryczałt letniskowy (zł)</label><input type="number" id="rateRyczalt" step="0.01"></div>
+                <div class="form-group" style="grid-column: span 2;"><label>Mnożnik Kary (np. 2 lub 3)</label><input type="number" id="rateMnoznik" step="0.1"></div>
+            </div>
+            <h4 style="border-bottom: 1px solid #333; padding-bottom: 5px;">Koszty odbioru 1 pojemnika Zmieszanych (do szacowania)</h4>
+            <div class="form-grid">
+                <div class="form-group"><label>Pojemnik 120 L (zł)</label><input type="number" id="ratePoj_120" step="0.01"></div>
+                <div class="form-group"><label>Pojemnik 240 L (zł)</label><input type="number" id="ratePoj_240" step="0.01"></div>
+                <div class="form-group"><label>Pojemnik 1100 L (zł)</label><input type="number" id="ratePoj_1100" step="0.01"></div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn-action btn-green" style="flex:1; padding:12px;" onclick="saveRate()">💾 ZAPISZ MATRYCĘ</button>
+                <button class="btn-action btn-red" style="flex:1; padding:12px;" onclick="document.getElementById('rateModal').style.display='none'">ANULUJ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="procModal" class="modal-overlay">
+        <div class="modal-content" style="width: 1000px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px;">
+                <div>
+                    <h2 style="margin: 0; color: var(--primary);">📂 Akta Sprawy: <span id="procZnak" style="color:#fff;"></span></h2>
+                    <div style="color: #aaa; margin-top: 5px;">Podmiot: <b id="procWlasciciel" style="color:#fff;"></b></div>
+                </div>
+                <button onclick="document.getElementById('procModal').style.display='none'" class="btn-logout">ZAMKNIJ AKTA</button>
+            </div>
+
+            <div id="procInfoPanel" style="background: rgba(46, 204, 113, 0.1); border-left: 4px solid var(--primary); padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+                <div style="font-size: 12px; color: #aaa; text-transform: uppercase; margin-bottom: 5px;">Szczegóły Naruszenia</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div><span style="color:#888;">Kategoria:</span> <b id="procKat" style="color:var(--primary);"></b></div>
+                    <div><span style="color:#888;">Data naruszenia:</span> <b id="procDataNar"></b></div>
+                </div>
+                <div><span style="color:#888;">Uzasadnienie faktyczne:</span><br><span id="procOpis" style="font-style: italic;"></span></div>
+            </div>
+            
+            <div class="form-grid" style="grid-template-columns: 1fr 300px;">
+                <div>
+                    <h4 style="color: var(--accent); margin-top:0;">Dokumenty w sprawie:</h4>
+                    <div id="docList"></div>
+                </div>
+                <div style="background: #111; padding: 20px; border-radius: 8px; border: 1px solid #333;">
+                    <h4 style="margin-top:0; color:var(--warning); text-align:center;">GENERATOR PISM</h4>
+                    <button class="btn-action" style="width:100%; margin-bottom:10px; padding:12px; background:#34495e; color:#fff;" onclick="openEditor('wszczecie')">📄 POSTANOWIENIE O WSZCZĘCIU</button>
+                    <button class="btn-action" style="width:100%; margin-bottom:10px; padding:12px; background:#34495e; color:#fff;" onclick="openEditor('wezwanie')">📄 WEZWANIE Z ART. 274a</button>
+                    <button class="btn-action" style="width:100%; margin-bottom:10px; padding:12px; background:#34495e; color:#fff;" onclick="openEditor('termin7')">📄 ZAWIADOMIENIE 7-DNIOWE</button>
+                    <button class="btn-action" style="width:100%; margin-bottom:10px; padding:12px; background:var(--danger); color:#fff;" onclick="openEditor('decyzja')">⚖️ DECYZJA WYMIAROWA</button>
+                    <button class="btn-action" style="width:100%; margin-bottom:10px; padding:12px; background:#27ae60; color:#fff; border: 1px solid #fff;" onclick="openEditor('umorzenie')">✅ UMORZENIE (Korekta do Urzędu)</button>
+                    <button class="btn-action" style="width:100%; margin-bottom:20px; padding:12px; background:#f1c40f; color:#000;" onclick="openMetryka()">📜 METRYKA SPRAWY</button>
                     
-                    <div id="map-capture-area" class="relative flex-1">
-                    <div id="identification-map" class="w-full h-full rounded-lg"></div>
-                        <div class="center-marker"></div>
-                    </div>
-                    <button type="button" id="capture-btn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 mt-4 text-lg">
-                        Zatwierdź lokalizację i zrób zdjęcie
-                    </button>
-                    <input type="file" id="identification-photo-input" accept="image/*" capture="environment" class="visually-hidden">
-                </div>
-
-                <div id="identification-preview-step" class="hidden space-y-4">
-                    <div>
-                        <label class="block text-gray-700 font-medium mb-1">Zdjęcie</label>
-                        <img id="identification-photo-preview" src="" class="w-full h-auto max-h-64 object-contain rounded-lg bg-gray-100 border">
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 font-medium mb-1">Dane lokalizacyjne</label>
-                        <div class="p-3 bg-gray-50 rounded-lg border text-sm">
-                            <p><strong>Współrzędne GPS:</strong> <span id="gps-coords"></span></p>
-                            <p class="mt-2"><strong>Otwórz w mapie:</strong> <a id="open-map-link" href="#" target="_blank" class="text-blue-600 hover:underline">OpenStreetMap</a></p>
-                             <p class="mt-2"><strong>Sprawdź w systemie SIP:</strong> <a id="geoportal-link" href="#" target="_blank" class="text-blue-600 hover:underline">Geoportal.gov.pl (Identyfikuj działkę)</a></p>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="identification-plot-number" class="block text-gray-700 font-medium mb-1">Numer Działki</label>
-                        <div class="flex items-center space-x-2">
-                            <input type="text" id="identification-plot-number" class="flex-1 w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Wpisz lub pobierz z geoportalu">
-                            <button type="button" id="fetch-address-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md text-sm">Pobierz dane</button>
-                        </div>
-                        <p id="address-status" class="text-xs mt-1 h-auto min-h-[1rem]"></p>
-                        <p class="text-xs text-gray-400 mt-1">Wskazówka: Jeśli dane nie zostały znalezione, spróbuj wskazać punkt bliżej budynku lub drogi.</p>
-                    </div>
-                    <div>
-                        <label for="identification-notes" class="block text-gray-700 font-medium mb-1">Notatki</label>
-                        <textarea id="identification-notes" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"></textarea>
-                    </div>
-                </div>
-
-                <div class="flex space-x-4 pt-4 border-t mt-4">
-                     <button type="button" id="save-identification-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Zapisz</button>
-                     <button type="button" id="delete-identification-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Usuń</button>
-                     <button type="button" id="generate-identification-pdf-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1 hidden">Generuj Raport PDF</button>
-                    <button type="button" class="w-full back-to-panel-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300 flex-1">Powrót</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="bulk-point-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
-        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg transition-transform duration-300">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Dodaj Punkt do Raportu Zbiorczego</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-gray-700 font-medium mb-1">Zrzut Ekranu Mapy</label>
-                    <img id="bulk-point-screenshot-preview" src="https://via.placeholder.com/400x200.png?text=Błąd" class="w-full h-auto max-h-60 object-contain rounded-lg bg-gray-100 border">
-                </div>
-                <div>
-                    <label for="bulk-point-plot-number" class="block text-gray-700 font-medium mb-1">Numer Działki (opcjonalnie)</label>
-                    <div class="flex items-center space-x-2">
-                        <input type="text" id="bulk-point-plot-number" class="flex-1 w-full p-3 border border-gray-300 rounded-lg" placeholder="Wpisz lub pobierz z GUGiK">
-                        <button type="button" id="fetch-bulk-plot-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md text-sm">Pobierz</button>
-                    </div>
-                    <p id="bulk-plot-status" class="text-xs mt-1 h-auto min-h-[1rem]"></p>
-                </div>
-                <div class="flex space-x-4 pt-4 border-t">
-                    <button type="button" id="save-bulk-point-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md flex-1">Zapisz Punkt</button>
-                    <button type="button" id="cancel-bulk-point-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md flex-1">Anuluj</button>
+                    <hr style="border-color:#333; margin-bottom:20px;">
+                    <button class="btn-action" style="width:100%; margin-bottom:10px; padding:10px; background:#8e44ad; color:#fff;" onclick="forceRefreshRules()">🔄 ODŚWIEŻ PRAWO I STAWKI</button>
+                    <button class="btn-action btn-green" style="width:100%; margin-bottom:10px; padding:10px;" onclick="openEditModal(currentProcId)">✏️ EDYTUJ DANE / SZACUJ</button>
                 </div>
             </div>
-        </div>
-    </div>
-    <div id="offline-maps-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
-        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-xl transition-transform duration-300">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">Zarządzaj Mapami Offline</h2>
-                <button id="close-offline-maps-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
-            </div>
-            <div id="saved-maps-list" class="space-y-3 mb-4">
-                <p class="text-center text-gray-500 p-4 border rounded-lg">Brak zapisanych map w pamięci podręcznej.</p>
-            </div>
-            <button id="open-download-modal-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-lg shadow-md">
-                Pobierz nowy obszar mapy
-            </button>
-        </div>
-    </div>
 
-    <div id="download-map-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 opacity-0 invisible">
-        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl transition-transform duration-300">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">Pobierz Mapę Offline</h2>
-                <button id="close-download-map-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
-            </div>
-            <div class="space-y-4">
-                <p class="text-sm text-gray-600">Narysuj prostokąt na mapie, aby wybrać obszar do pobrania. Następnie wybierz poziom przybliżenia.</p>
-                <div id="offline-map-selection"></div>
-                <div>
-                    <label for="offline-area-name" class="block text-gray-700 font-medium mb-1">Nazwa obszaru</label>
-                    <input type="text" id="offline-area-name" placeholder="np. Gmina Giżycko - Wschód" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                </div>
-                <div>
-                    <label for="offline-zoom-slider" class="block text-gray-700 font-medium mb-1">Maksymalny poziom przybliżenia (zoom)</label>
-                    <div class="zoom-slider-container">
-                        <span>13</span>
-                        <input type="range" id="offline-zoom-slider" min="13" max="18" value="16" step="1" class="w-full">
-                        <span>18</span>
-                        <span id="zoom-level-display" class="font-bold text-cyan-700 w-8 text-center">16</span>
-                    </div>
-                </div>
-                <div class="p-3 bg-gray-100 rounded-lg text-center">
-                    <p id="tile-counter-info" class="text-gray-700">Najpierw zaznacz obszar na mapie.</p>
-                </div>
-                <button id="download-tiles-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors duration-300" disabled>
-                    Pobierz
-                </button>
+            <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 20px; display:flex; gap:10px;">
+                <button class="btn-action" style="background: var(--sko); color: #fff; padding: 10px;" onclick="przekazDoSKO()">🏛️ PRZEKAŻ DO SKO</button>
+                <button class="btn-action" style="background: #2980b9; color: #fff; padding: 10px;" onclick="wrocZSKO()">🔙 WRÓĆ Z SKO</button>
+                <button class="btn-action" style="background: var(--archive); color: #fff; padding: 10px;" onclick="archiwizujSprawe()">🗄️ ZARCHIWIZUJ</button>
+                <button class="btn-action" style="background: #7f8c8d; color: #fff; padding: 10px;" onclick="przywrocSprawe()">♻️ PRZYWRÓĆ Z ARCHIWUM</button>
+                <div style="flex-grow:1;"></div>
+                <button class="btn-action btn-red" style="padding: 10px;" onclick="usunSpraweCalkowicie()">🗑️ USUŃ CAŁKOWICIE</button>
             </div>
         </div>
     </div>
 
-    <div id="pdf-render-template" class="absolute -left-[9999px]"></div>
-    
-    <script src="./index.js" defer></script>
+    <div id="editorModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="toolbar">
+                <button class="btn-action btn-green" onclick="printDocument()">🖨️ DRUKUJ DO PDF</button>
+                <button class="btn-action btn-warning" onclick="downloadDocument()">💾 POBIERZ NA DYSK (.DOC)</button>
+                <button class="btn-action btn-red" onclick="closeEditorAndRefresh()">ZAMKNIJ EDYTOR</button>
+            </div>
+            <div id="documentEditor" contenteditable="true"></div>
+        </div>
+    </div>
+
+    <div id="userModal" class="modal-overlay">
+        <div class="modal-content" style="width: 400px;">
+            <h3 id="uModalTitle" style="color:var(--primary); margin-top:0;">Użytkownik</h3>
+            <div class="form-group"><label>Login</label><input type="text" id="uLogin"></div>
+            <div class="form-group"><label>Pełna Nazwa</label><input type="text" id="uNazwa"></div>
+            <div class="form-group">
+                <label>Rola systemowa</label>
+                <select id="uRola">
+                    <option value="kierowca">Kierowca</option>
+                    <option value="wykonawca">Wykonawca (Dyspozytor)</option>
+                    <option value="pszok">Pracownik PSZOK</option>
+                    <option value="kontroler">Kontroler Terenowy</option>
+                    <option value="admin">Administrator Gminy</option>
+                </select>
+            </div>
+            <div class="form-group"><label>Hasło (Zostaw puste by nie zmieniać)</label><input type="password" id="uHaslo"></div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn-action btn-green" style="flex:1; padding:12px;" onclick="saveUser()">ZAPISZ</button>
+                <button class="btn-action btn-red" style="flex:1; padding:12px;" onclick="document.getElementById('userModal').style.display='none'">ANULUJ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="importModal" class="modal-overlay">
+        <div class="modal-content" style="width: 600px;">
+            <h3 style="color:var(--primary); margin-top:0;">Import z PDF (OCR)</h3>
+            <p style="font-size:12px; color:#aaa;">Skopiuj tabelę z pojemnikami z deklaracji PDF i wklej poniżej.</p>
+            <textarea id="importText" style="width:100%; height:200px; background:#111; color:#fff; border:1px solid #444; padding:10px; border-radius:5px;"></textarea>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn-action btn-green" style="flex:1; padding:12px;" onclick="parseImport()">🔍 ODCZYTAJ</button>
+                <button class="btn-action btn-red" style="flex:1; padding:12px;" onclick="document.getElementById('importModal').style.display='none'">ANULUJ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="calendarModal" class="modal-overlay">
+        <div class="modal-content" style="width: 800px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="margin:0;">📅 Kalendarz Terminów KPA</h2>
+                <div style="font-size: 18px; font-weight:bold; color:var(--primary);" id="calTitle">...</div>
+                <button onclick="document.getElementById('calendarModal').style.display='none'" class="btn-logout">ZAMKNIJ</button>
+            </div>
+            
+            <div class="cal-header">
+                <div>PN</div><div>WT</div><div>ŚR</div><div>CZ</div><div>PT</div><div>SB</div><div>ND</div>
+            </div>
+            <div id="calGrid" class="cal-container"></div>
+            
+            <div style="margin-top:20px; font-size:12px; color:#888;">
+                <span style="display:inline-block; width:10px; height:10px; background:var(--danger); border-radius:50%;"></span> Termin mija/minął &nbsp;
+                <span style="display:inline-block; width:10px; height:10px; background:var(--warning); border-radius:50%;"></span> Mija < 3 dni &nbsp;
+                <span style="display:inline-block; width:10px; height:10px; background:var(--primary); border-radius:50%;"></span> Bezpieczny termin
+            </div>
+        </div>
+    </div>
+
+    <script src="calculator.js"></script>
+    <script src="scheduler.js"></script>
+    <script src="index.js"></script>
 </body>
 </html>
